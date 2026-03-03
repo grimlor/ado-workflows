@@ -1,0 +1,117 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ado-workflows"
+version = "0.1.0"
+description = "Azure DevOps workflow automation library — PR context, repository discovery, and SDK client wrappers"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "grimlor" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "actionable-errors>=0.1.0",
+    "azure-devops>=7.1.0b4",
+    "azure-identity>=1.19,<2",
+]
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.13,<2",
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<1",
+    "pytest-cov>=6,<7",
+    "ruff>=0.8,<1",
+    "taskipy>=1.14,<2",
+    "pre-commit>=4,<5",
+]
+
+[project.urls]
+Repository = "https://github.com/grimlor/ado-workflows"
+
+# ---------------------------------------------------------------------------
+# Taskipy
+# ---------------------------------------------------------------------------
+[tool.taskipy.tasks]
+lint   = "uv run ruff check --fix src/ tests/"
+format = "uv run ruff format src/ tests/"
+type   = "uv run mypy src/ tests/"
+test   = "uv run pytest tests/ -v"
+check  = "task lint && task type && task test"
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+select = [
+    "E",        # pycodestyle errors
+    "W",        # pycodestyle warnings
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "SIM",      # flake8-simplify
+    "TCH",      # flake8-type-checking
+    "RUF",      # ruff-specific rules
+    "PLC0415",  # import-outside-top-level
+    "PLC2701",  # import-private-name (preview)
+]
+ignore = [
+    "E501",  # line length (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ado_workflows"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-m 'not integration and not live'"
+markers = [
+    "integration: marks tests requiring external services",
+    "live: marks tests requiring live network access",
+]
