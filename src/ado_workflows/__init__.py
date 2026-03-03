@@ -8,4 +8,17 @@ Three-layer API for Azure DevOps operations:
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from ado_workflows.discovery import (
+    discover_repositories,
+    infer_target_repository,
+    inspect_git_repository,
+)
+from ado_workflows.parsing import parse_ado_date, parse_ado_url
+
+__all__: list[str] = [
+    "discover_repositories",
+    "infer_target_repository",
+    "inspect_git_repository",
+    "parse_ado_date",
+    "parse_ado_url",
+]
