@@ -22,16 +22,29 @@ from ado_workflows.discovery import (
     infer_target_repository,
     inspect_git_repository,
 )
+from ado_workflows.models import (
+    VOTE_TEXT,
+    PendingPR,
+    ReviewerInfo,
+    VoteStatus,
+)
 from ado_workflows.parsing import parse_ado_date, parse_ado_url
 from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context
+from ado_workflows.votes import deduplicate_team_containers, determine_vote_status
 
 __all__: list[str] = [
     "AZURE_DEVOPS_RESOURCE_ID",
+    "VOTE_TEXT",
     "AdoClient",
     "AzureDevOpsPRContext",
     "ConnectionFactory",
+    "PendingPR",
     "RepositoryContext",
+    "ReviewerInfo",
+    "VoteStatus",
     "clear_repository_context",
+    "deduplicate_team_containers",
+    "determine_vote_status",
     "discover_repositories",
     "establish_pr_context",
     "get_context_status",
