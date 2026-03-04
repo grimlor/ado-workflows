@@ -3,7 +3,6 @@
 Covers:
     TestConnectionCreation — factory creates valid SDK connections
     TestConnectionCaching — per-org caching with token refresh
-    TestOrgUrlNormalization — URL normalization for cache key consistency
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ from unittest.mock import Mock, patch
 from ado_workflows.auth import (
     AZURE_DEVOPS_RESOURCE_ID,
     ConnectionFactory,
-    _normalize_org_url,  # noqa: PLC2701
 )
 
 if TYPE_CHECKING:
@@ -181,7 +179,8 @@ class TestConnectionCaching:
     WHAT: Repeated calls with the same org URL return the cached connection;
           expired or near-expired tokens trigger fresh token acquisition;
           different org URLs maintain separate cached connections;
-          clear_cache removes all cached connections
+          clear_cache removes all cached connections;
+          trailing-slash variations of the same org URL share a cache entry
     WHY: Token acquisition involves network I/O — caching avoids unnecessary
          round-trips while token refresh prevents auth failures
 
@@ -344,50 +343,6 @@ class TestConnectionCaching:
         assert second_a is not first_a
         assert credential.get_token.call_count == 3
 
-
-# ---------------------------------------------------------------------------
-# TestOrgUrlNormalization
-# ---------------------------------------------------------------------------
-
-
-class TestOrgUrlNormalization:
-    """
-    REQUIREMENT: Organization URLs are normalized for consistent cache keys.
-
-    WHO: ConnectionFactory caching logic
-    WHAT: Trailing slashes are stripped so that URLs differing only by
-          trailing slash resolve to the same cache entry
-    WHY: Without normalization, the same org could have multiple cached
-         connections, wasting tokens and memory
-
-    MOCK BOUNDARY:
-        Mock:  nothing — this tests a pure function
-        Real:  _normalize_org_url
-        Never: N/A
-    """
-
-    def test_trailing_slash_stripped(self) -> None:
-        """
-        Given a URL with a trailing slash
-        When normalized
-        Then the trailing slash is removed
-        """
-        # Given/When/Then
-        assert _normalize_org_url("https://dev.azure.com/MyOrg/") == (
-            "https://dev.azure.com/MyOrg"
-        )
-
-    def test_url_without_trailing_slash_unchanged(self) -> None:
-        """
-        Given a URL without a trailing slash
-        When normalized
-        Then it is returned unchanged
-        """
-        # Given/When/Then
-        assert _normalize_org_url("https://dev.azure.com/MyOrg") == (
-            "https://dev.azure.com/MyOrg"
-        )
-
     @patch("ado_workflows.auth.Connection")
     @patch("ado_workflows.auth.BasicTokenAuthentication")
     def test_trailing_slash_and_no_slash_share_cache(
@@ -407,5 +362,7 @@ class TestOrgUrlNormalization:
         conn_without = factory.get_connection("https://dev.azure.com/SlashOrg")
 
         # Then: same cached connection
-        assert conn_with is conn_without
+        assert conn_with is conn_without, (
+            f"Expected same cached connection, got {conn_with!r} vs {conn_without!r}"
+        )
         credential.get_token.assert_called_once()

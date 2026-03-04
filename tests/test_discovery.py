@@ -1,10 +1,12 @@
-"""
-BDD tests for ado_workflows.discovery — git repository discovery primitives.
+"""BDD tests for ado_workflows.discovery — git repository discovery primitives.
 
 Covers:
-- TestInspectGitRepository: single-repo extraction, non-ADO repos, subprocess failures
-- TestDiscoverRepositories: single-repo root, multi-repo scanning, empty workspace
-- TestInferTargetRepository: working directory match, single repo, ambiguous selection
+    TestInspectGitRepository — single-repo extraction, non-ADO repos,
+        subprocess failures
+    TestDiscoverRepositories — single-repo root, multi-repo scanning,
+        empty workspace
+    TestInferTargetRepository — working directory match, single repo,
+        ambiguous selection
 
 Public API surface (from src/ado_workflows/discovery.py):
     inspect_git_repository(repo_path: str) -> dict[str, Any] | None
@@ -18,8 +20,11 @@ Public API surface (from src/ado_workflows/discovery.py):
 from __future__ import annotations
 
 import subprocess as sp
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from ado_workflows.discovery import (
     discover_repositories,
@@ -27,54 +32,79 @@ from ado_workflows.discovery import (
     inspect_git_repository,
 )
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_ADO_REMOTE = "https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n"
+_VSO_REMOTE = (
+    "https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo\n"
+)
+_GITHUB_REMOTE = "https://github.com/example/some-repo.git\n"
+
+
+def _git_success(remote: str = _ADO_REMOTE) -> Mock:
+    """Return a ``subprocess.run`` return value for a successful git call."""
+    return Mock(returncode=0, stdout=remote)
+
+
+def _git_failure() -> Mock:
+    """Return a ``subprocess.run`` return value for a failed git call."""
+    return Mock(returncode=1, stderr="fatal: not a git repository")
+
+
+def _make_git_repo(workspace: Path, name: str) -> Path:
+    """Create a directory with a ``.git`` marker folder inside *workspace*."""
+    repo = workspace / name
+    (repo / ".git").mkdir(parents=True)
+    return repo
+
+
+# ---------------------------------------------------------------------------
+# TestInspectGitRepository
+# ---------------------------------------------------------------------------
+
 
 class TestInspectGitRepository:
     """
-    REQUIREMENT: A single git repository is inspected to extract Azure DevOps metadata.
+    REQUIREMENT: A single git repository is inspected to extract Azure DevOps
+    metadata.
 
     WHO: Any consumer needing org/project/repo from a local git checkout.
-    WHAT: Running `git config --get remote.origin.url` on a valid Azure DevOps
-          repo returns a dict with path, name, organization, project, remote_url,
-          and org_url; non-Azure DevOps repos return None; subprocess failures
-          return None.
+    WHAT: Running ``git config --get remote.origin.url`` on a valid Azure
+          DevOps repo returns a dict with path, name, organization, project,
+          remote_url, and org_url; non-Azure DevOps repos return None;
+          subprocess failures return None.
     WHY: Repository metadata is the input to every Layer 2/3 operation —
          inspect is the single source of truth for what repo the user is in.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git CLI — the only I/O boundary),
-               os.path.exists, os.listdir, os.path.dirname, os.path.basename
-        Real:  inspect_git_repository function, parse_ado_url (called internally)
-        Never: construct the return dict directly — always obtain via inspect_git_repository()
+        Mock:  subprocess.run (git CLI — the only I/O boundary)
+        Real:  inspect_git_repository function, parse_ado_url (called
+               internally), filesystem (tmp_path)
+        Never: construct the return dict directly — always obtain via
+               inspect_git_repository()
     """
 
-    def test_valid_dev_azure_com_repo_returns_metadata(self) -> None:
+    def test_valid_dev_azure_com_repo_returns_metadata(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a git repo with a dev.azure.com remote
         When inspect_git_repository is called
         Then a dict with org, project, name, and org_url is returned
         """
-        # Given: a git repo with dev.azure.com remote
-        with (
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
+        # Given: a directory with a .git folder and an ADO remote
+        repo = _make_git_repo(tmp_path, "MyRepo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(),
         ):
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n",
-            )
-            mock_listdir.return_value = ["src", "tests"]
-            mock_dirname.return_value = "/workspace"
-            mock_basename.return_value = "MyRepo"
-
             # When: the repository is inspected
-            result = inspect_git_repository("/workspace/MyRepo")
+            result = inspect_git_repository(str(repo))
 
         # Then: metadata is correct
-        assert result is not None, (
-            "Expected dict for valid ADO repo, got None"
-        )
+        assert result is not None, "Expected dict for valid ADO repo, got None"
         assert result["organization"] == "ExampleOrg", (
             f"Expected org 'ExampleOrg', got '{result['organization']}'"
         )
@@ -85,35 +115,29 @@ class TestInspectGitRepository:
             f"Expected name 'MyRepo', got '{result['name']}'"
         )
         assert result["org_url"] == "https://dev.azure.com/ExampleOrg", (
-            f"Expected org_url 'https://dev.azure.com/ExampleOrg', got '{result['org_url']}'"
+            f"Expected org_url 'https://dev.azure.com/ExampleOrg', "
+            f"got '{result['org_url']}'"
         )
-        assert result["path"] == "/workspace/MyRepo", (
-            f"Expected path '/workspace/MyRepo', got '{result['path']}'"
+        assert result["path"] == str(repo), (
+            f"Expected path '{repo}', got '{result['path']}'"
         )
 
-    def test_valid_visualstudio_com_repo_returns_legacy_org_url(self) -> None:
+    def test_valid_visualstudio_com_repo_returns_legacy_org_url(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a git repo with a visualstudio.com remote
         When inspect_git_repository is called
         Then org_url uses the visualstudio.com format
         """
-        # Given: a git repo with visualstudio.com remote
-        with (
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
+        # Given: a repo with a visualstudio.com remote
+        repo = _make_git_repo(tmp_path, "MyRepo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(_VSO_REMOTE),
         ):
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo\n",
-            )
-            mock_listdir.return_value = ["src"]
-            mock_dirname.return_value = "/workspace"
-            mock_basename.return_value = "MyRepo"
-
             # When: the repository is inspected
-            result = inspect_git_repository("/workspace/MyRepo")
+            result = inspect_git_repository(str(repo))
 
         # Then: org_url uses visualstudio.com format
         assert result is not None, (
@@ -123,305 +147,296 @@ class TestInspectGitRepository:
             f"Expected visualstudio.com org_url, got '{result['org_url']}'"
         )
 
-    def test_non_azure_devops_remote_returns_none(self) -> None:
+    def test_non_azure_devops_remote_returns_none(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a git repo with a GitHub remote
         When inspect_git_repository is called
         Then None is returned
         """
-        # Given: a git repo with a GitHub remote
-        with patch("ado_workflows.discovery.subprocess.run") as mock_run:
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://github.com/example/some-repo.git\n",
-            )
-
+        # Given: a repo with a GitHub remote
+        repo = _make_git_repo(tmp_path, "some-repo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(_GITHUB_REMOTE),
+        ):
             # When: the repository is inspected
-            result = inspect_git_repository("/workspace/some-repo")
+            result = inspect_git_repository(str(repo))
 
         # Then: None is returned for non-ADO repos
-        assert result is None, (
-            f"Expected None for GitHub repo, got {result}"
-        )
+        assert result is None, f"Expected None for GitHub repo, got {result}"
 
-    def test_git_command_failure_returns_none(self) -> None:
+    def test_git_command_failure_returns_none(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a directory where git config fails
         When inspect_git_repository is called
         Then None is returned
         """
-        # Given: git command fails
-        with patch("ado_workflows.discovery.subprocess.run") as mock_run:
-            mock_run.return_value = Mock(
-                returncode=1,
-                stderr="fatal: not a git repository",
-            )
-
+        # Given: a directory where git fails
+        repo = _make_git_repo(tmp_path, "not-a-repo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_failure(),
+        ):
             # When: the repository is inspected
-            result = inspect_git_repository("/not/a/repo")
+            result = inspect_git_repository(str(repo))
 
         # Then: None is returned
         assert result is None, (
             f"Expected None for failed git command, got {result}"
         )
 
-    def test_subprocess_timeout_returns_none(self) -> None:
+    def test_subprocess_timeout_returns_none(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a directory where git config times out
         When inspect_git_repository is called
         Then None is returned
         """
         # Given: git command times out
-        with patch("ado_workflows.discovery.subprocess.run") as mock_run:
-            mock_run.side_effect = sp.TimeoutExpired(cmd="git", timeout=10)
-
+        repo = _make_git_repo(tmp_path, "slow-repo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            side_effect=sp.TimeoutExpired(cmd="git", timeout=10),
+        ):
             # When: the repository is inspected
-            result = inspect_git_repository("/workspace/slow-repo")
+            result = inspect_git_repository(str(repo))
 
         # Then: None is returned gracefully
         assert result is None, (
             f"Expected None for subprocess timeout, got {result}"
         )
 
-    def test_workspace_context_included_in_result(self) -> None:
+    def test_workspace_context_included_in_result(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a valid Azure DevOps git repo in a multi-repo workspace
         When inspect_git_repository is called
         Then the result includes workspace_context metadata
         """
-        # Given: a repo inside a workspace with siblings
-        with (
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
-        ):
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n",
-            )
-            mock_listdir.return_value = ["MyRepo", "OtherRepo", "ThirdRepo"]
-            mock_dirname.return_value = "/workspace"
-            mock_basename.return_value = "MyRepo"
+        # Given: a workspace with multiple sibling directories
+        workspace = tmp_path
+        repo = _make_git_repo(workspace, "MyRepo")
+        _make_git_repo(workspace, "OtherRepo")
+        (workspace / "ThirdDir").mkdir()
 
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(),
+        ):
             # When: the repository is inspected
-            result = inspect_git_repository("/workspace/MyRepo")
+            result = inspect_git_repository(str(repo))
 
         # Then: workspace_context is present and indicates multi-repo
         assert result is not None, "Expected dict, got None"
         assert "workspace_context" in result, (
-            f"Expected workspace_context in result, got keys: {list(result.keys())}"
+            f"Expected workspace_context in result, got keys: "
+            f"{list(result.keys())}"
         )
         ctx = result["workspace_context"]
         assert ctx["is_multi_repo_workspace"] is True, (
-            f"Expected multi-repo workspace, got {ctx['is_multi_repo_workspace']}"
+            f"Expected multi-repo workspace, "
+            f"got {ctx['is_multi_repo_workspace']}"
         )
-        assert ctx["workspace_root"] == "/workspace", (
-            f"Expected workspace_root '/workspace', got '{ctx['workspace_root']}'"
+        assert ctx["workspace_root"] == str(workspace), (
+            f"Expected workspace_root '{workspace}', "
+            f"got '{ctx['workspace_root']}'"
         )
 
-    def test_workspace_context_graceful_on_parent_permission_error(self) -> None:
+    def test_workspace_context_graceful_on_parent_permission_error(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given a valid ADO repo whose parent directory cannot be listed
         When inspect_git_repository is called
-        Then workspace_context defaults to single-repo (is_multi_repo_workspace=False)
+        Then workspace_context defaults to single-repo
         """
-        # Given: parent directory listing raises PermissionError
-        with (
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
-        ):
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n",
+        # Given: a repo whose parent listing raises PermissionError
+        parent = tmp_path / "restricted"
+        parent.mkdir()
+        repo = parent / "MyRepo"
+        (repo / ".git").mkdir(parents=True)
+        parent.chmod(0o000)
+
+        try:
+            with patch(
+                "ado_workflows.discovery.subprocess.run",
+                return_value=_git_success(),
+            ):
+                # When: the repository is inspected
+                result = inspect_git_repository(str(repo))
+
+            # Then: graceful degradation — assumes single-repo
+            assert result is not None, "Expected dict, got None"
+            ctx = result["workspace_context"]
+            assert ctx["is_multi_repo_workspace"] is False, (
+                f"Expected single-repo fallback on PermissionError, "
+                f"got {ctx['is_multi_repo_workspace']}"
             )
-            mock_listdir.side_effect = PermissionError("Permission denied")
-            mock_dirname.return_value = "/restricted"
-            mock_basename.return_value = "MyRepo"
+        finally:
+            parent.chmod(0o755)
 
-            # When: the repository is inspected
-            result = inspect_git_repository("/restricted/MyRepo")
 
-        # Then: graceful degradation — assumes single-repo
-        assert result is not None, "Expected dict, got None"
-        ctx = result["workspace_context"]
-        assert ctx["is_multi_repo_workspace"] is False, (
-            f"Expected single-repo fallback on PermissionError, got {ctx['is_multi_repo_workspace']}"
-        )
+# ---------------------------------------------------------------------------
+# TestDiscoverRepositories
+# ---------------------------------------------------------------------------
 
 
 class TestDiscoverRepositories:
     """
-    REQUIREMENT: All Azure DevOps git repositories under a root are discovered.
+    REQUIREMENT: All Azure DevOps git repos under a root are discovered.
 
     WHO: Any consumer needing to enumerate repos in a workspace.
-    WHAT: If search_root itself is a git repo, returns a single-element list;
-          otherwise scans immediate children for git repos; non-git directories
-          and non-ADO repos are excluded; permission errors are handled gracefully.
-    WHY: Multi-repo workspaces are common in enterprise environments — correct
-         enumeration is the prerequisite for intelligent repo selection.
+    WHAT: If search_root itself is a git repo, returns a single-element
+          list; otherwise scans immediate children for git repos; non-git
+          directories and non-ADO repos are excluded; permission errors are
+          handled gracefully.
+    WHY: Multi-repo workspaces are common in enterprise environments —
+         correct enumeration is the prerequisite for intelligent repo
+         selection.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git CLI), os.path.exists, os.listdir,
-               os.path.isdir, os.path.dirname, os.path.basename
-        Real:  discover_repositories function, inspect_git_repository (called internally)
-        Never: construct repo dicts directly — always obtain via discover_repositories()
+        Mock:  subprocess.run (git CLI)
+        Real:  discover_repositories function, inspect_git_repository
+               (called internally), filesystem (tmp_path)
+        Never: construct repo dicts directly — always obtain via
+               discover_repositories()
     """
 
-    def test_search_root_is_git_repo_returns_single_element(self) -> None:
+    def test_search_root_is_git_repo_returns_single_element(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given search_root is itself a git repository
         When discover_repositories is called
         Then a single-element list is returned
         """
-        # Given: search_root is a git repo
-        with (
-            patch("ado_workflows.discovery.os.path.exists") as mock_exists,
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
+        # Given: search_root has a .git folder
+        repo = _make_git_repo(tmp_path, "MyRepo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(),
         ):
-            mock_exists.side_effect = lambda p: p == "/workspace/MyRepo/.git"
-            mock_run.return_value = Mock(
-                returncode=0,
-                stdout="https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n",
-            )
-            mock_listdir.return_value = ["src", "tests"]
-            mock_dirname.return_value = "/workspace"
-            mock_basename.return_value = "MyRepo"
-
             # When: repositories are discovered
-            repos = discover_repositories("/workspace/MyRepo")
+            repos = discover_repositories(str(repo))
 
         # Then: exactly one repository is returned
         assert len(repos) == 1, (
-            f"Expected 1 repo when search_root is a git repo, got {len(repos)}"
+            f"Expected 1 repo when search_root is a git repo, "
+            f"got {len(repos)}"
         )
         assert repos[0]["name"] == "MyRepo", (
             f"Expected repo name 'MyRepo', got '{repos[0]['name']}'"
         )
 
-    def test_multi_repo_workspace_discovers_all_git_children(self) -> None:
+    def test_multi_repo_workspace_discovers_all_git_children(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given search_root contains multiple git repository subdirectories
         When discover_repositories is called
         Then all Azure DevOps repos are included in the result
         """
-        # Given: workspace root with multiple repos
-        with (
-            patch("ado_workflows.discovery.os.path.exists") as mock_exists,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.isdir") as mock_isdir,
-            patch("ado_workflows.discovery.subprocess.run") as mock_run,
-            patch("ado_workflows.discovery.os.path.dirname") as mock_dirname,
-            patch("ado_workflows.discovery.os.path.basename") as mock_basename,
-        ):
-            # Root is not a git repo, but children are
-            mock_exists.side_effect = lambda p: p in {
-                "/workspace/RepoA/.git",
-                "/workspace/RepoB/.git",
-            }
-            mock_listdir.side_effect = [
-                # First call: listing workspace root children
-                ["RepoA", "RepoB", "not-a-repo"],
-                # Subsequent calls: listing each repo's parent for workspace_context
-                ["RepoA", "RepoB", "not-a-repo"],
-                ["RepoA", "RepoB", "not-a-repo"],
-            ]
-            mock_isdir.side_effect = lambda p: p in {
-                "/workspace/RepoA",
-                "/workspace/RepoB",
-                "/workspace/not-a-repo",
-            }
+        # Given: a workspace root with multiple child repos
+        workspace = tmp_path
+        _make_git_repo(workspace, "RepoA")
+        _make_git_repo(workspace, "RepoB")
+        (workspace / "not-a-repo").mkdir()  # no .git — skipped
 
-            def git_response(cmd: list[str], **kwargs: Any) -> Mock:
-                cwd = kwargs.get("cwd", "")
-                if "RepoA" in str(cwd):
-                    return Mock(
-                        returncode=0,
-                        stdout="https://dev.azure.com/ExampleOrg/ProjectA/_git/RepoA\n",
-                    )
-                return Mock(
-                    returncode=0,
-                    stdout="https://dev.azure.com/ExampleOrg/ProjectB/_git/RepoB\n",
+        def git_response(*args: Any, **kwargs: Any) -> Mock:
+            cwd = str(kwargs.get("cwd", ""))
+            if "RepoA" in cwd:
+                return _git_success(
+                    "https://dev.azure.com/ExampleOrg/ProjA/_git/RepoA\n"
                 )
+            return _git_success(
+                "https://dev.azure.com/ExampleOrg/ProjB/_git/RepoB\n"
+            )
 
-            mock_run.side_effect = git_response
-            mock_dirname.return_value = "/workspace"
-            mock_basename.side_effect = lambda p: p.rsplit("/", 1)[-1]
-
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            side_effect=git_response,
+        ):
             # When: repositories are discovered
-            repos = discover_repositories("/workspace")
+            repos = discover_repositories(str(workspace))
 
         # Then: both ADO repos are found
-        names = [r["name"] for r in repos]
+        names = sorted(r["name"] for r in repos)
         assert len(repos) == 2, (
             f"Expected 2 repos, got {len(repos)}: {names}"
         )
         assert "RepoA" in names, f"Expected RepoA in {names}"
         assert "RepoB" in names, f"Expected RepoB in {names}"
 
-    def test_empty_workspace_returns_empty_list(self) -> None:
+    def test_empty_workspace_returns_empty_list(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given search_root has no git repositories
         When discover_repositories is called
         Then an empty list is returned
         """
-        # Given: workspace with no git repos
-        with (
-            patch("ado_workflows.discovery.os.path.exists") as mock_exists,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-            patch("ado_workflows.discovery.os.path.isdir") as mock_isdir,
-        ):
-            mock_exists.return_value = False
-            mock_listdir.return_value = ["docs", "scripts"]
-            mock_isdir.return_value = True
+        # Given: a workspace with only non-git directories
+        workspace = tmp_path
+        (workspace / "docs").mkdir()
+        (workspace / "scripts").mkdir()
 
-            # When: repositories are discovered
-            repos = discover_repositories("/workspace")
+        # When: no .git dirs exist, discover_repositories won't call git
+        repos = discover_repositories(str(workspace))
 
         # Then: empty list is returned
         assert repos == [], (
             f"Expected empty list for workspace with no git repos, got {repos}"
         )
 
-    def test_permission_error_during_scan_returns_empty_list(self) -> None:
+    def test_permission_error_during_scan_returns_empty_list(
+        self, tmp_path: Path
+    ) -> None:
         """
         Given search_root listing raises PermissionError
         When discover_repositories is called
         Then an empty list is returned gracefully
         """
-        # Given: permission error when listing
-        with (
-            patch("ado_workflows.discovery.os.path.exists") as mock_exists,
-            patch("ado_workflows.discovery.os.listdir") as mock_listdir,
-        ):
-            mock_exists.return_value = False  # not a git repo itself
-            mock_listdir.side_effect = PermissionError("Permission denied")
+        # Given: a directory we can't list
+        restricted = tmp_path / "restricted"
+        restricted.mkdir()
+        restricted.chmod(0o000)
 
+        try:
             # When: repositories are discovered
-            repos = discover_repositories("/restricted")
+            repos = discover_repositories(str(restricted))
 
-        # Then: empty list rather than exception
-        assert repos == [], (
-            f"Expected empty list on PermissionError, got {repos}"
-        )
+            # Then: empty list rather than exception
+            assert repos == [], (
+                f"Expected empty list on PermissionError, got {repos}"
+            )
+        finally:
+            restricted.chmod(0o755)
+
+
+# ---------------------------------------------------------------------------
+# TestInferTargetRepository
+# ---------------------------------------------------------------------------
 
 
 class TestInferTargetRepository:
     """
     REQUIREMENT: The most likely target repository is selected from a list.
 
-    WHO: Any consumer needing to resolve which repo the user intends to work with.
-    WHAT: When working_directory is inside a repo's path, that repo is selected;
-          when only one repo exists, it is selected automatically; when no match
-          is found and cwd is inside a repo, that repo is selected; when truly
-          ambiguous, None is returned.
+    WHO: Any consumer needing to resolve which repo the user intends to
+         work with.
+    WHAT: When working_directory is inside a repo's path, that repo is
+          selected; when only one repo exists, it is selected automatically;
+          when no match is found and cwd is inside a repo, that repo is
+          selected; when truly ambiguous, None is returned.
     WHY: Multi-repo workspaces require intelligent default selection —
-         forcing users to specify a repo for every operation is unacceptable UX.
+         forcing users to specify a repo for every operation is
+         unacceptable UX.
 
     MOCK BOUNDARY:
         Mock:  os.getcwd (cwd fallback — the only I/O boundary)
@@ -442,7 +457,9 @@ class TestInferTargetRepository:
         ]
 
         # When: inference runs with working_directory hint
-        result = infer_target_repository(repos, "/workspace/RepoB/src/main.py")
+        result = infer_target_repository(
+            repos, "/workspace/RepoB/src/main.py"
+        )
 
         # Then: RepoB is selected
         assert result is not None, (
@@ -485,7 +502,9 @@ class TestInferTargetRepository:
         result = infer_target_repository(repos)
 
         # Then: None
-        assert result is None, f"Expected None for empty list, got {result}"
+        assert result is None, (
+            f"Expected None for empty list, got {result}"
+        )
 
     def test_ambiguous_selection_returns_none(self) -> None:
         """
