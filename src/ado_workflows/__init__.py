@@ -23,14 +23,17 @@ from ado_workflows.discovery import (
     inspect_git_repository,
 )
 from ado_workflows.parsing import parse_ado_date, parse_ado_url
+from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context
 
 __all__: list[str] = [
     "AZURE_DEVOPS_RESOURCE_ID",
     "AdoClient",
+    "AzureDevOpsPRContext",
     "ConnectionFactory",
     "RepositoryContext",
     "clear_repository_context",
     "discover_repositories",
+    "establish_pr_context",
     "get_context_status",
     "get_repository_context",
     "infer_target_repository",
