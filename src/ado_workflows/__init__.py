@@ -10,7 +10,13 @@ from __future__ import annotations
 
 from ado_workflows.auth import AZURE_DEVOPS_RESOURCE_ID, ConnectionFactory
 from ado_workflows.client import AdoClient
-from ado_workflows.comments import analyze_pr_comments, sanitize_ado_response
+from ado_workflows.comments import (
+    analyze_pr_comments,
+    post_comment,
+    reply_to_comment,
+    resolve_comments,
+    sanitize_ado_response,
+)
 from ado_workflows.context import (
     RepositoryContext,
     clear_repository_context,
@@ -23,6 +29,7 @@ from ado_workflows.discovery import (
     infer_target_repository,
     inspect_git_repository,
 )
+from ado_workflows.lifecycle import create_pull_request
 from ado_workflows.models import (
     VOTE_TEXT,
     ApprovalStatus,
@@ -30,7 +37,9 @@ from ado_workflows.models import (
     CommentAnalysis,
     CommentInfo,
     CommentSummary,
+    CreatedPR,
     PendingPR,
+    ResolveResult,
     ReviewerInfo,
     ReviewStatus,
     VoteStatus,
@@ -55,13 +64,16 @@ __all__: list[str] = [
     "CommentInfo",
     "CommentSummary",
     "ConnectionFactory",
+    "CreatedPR",
     "PendingPR",
     "RepositoryContext",
+    "ResolveResult",
     "ReviewStatus",
     "ReviewerInfo",
     "VoteStatus",
     "analyze_pr_comments",
     "clear_repository_context",
+    "create_pull_request",
     "deduplicate_team_containers",
     "determine_vote_status",
     "discover_repositories",
@@ -75,6 +87,9 @@ __all__: list[str] = [
     "inspect_git_repository",
     "parse_ado_date",
     "parse_ado_url",
+    "post_comment",
+    "reply_to_comment",
+    "resolve_comments",
     "sanitize_ado_response",
     "set_repository_context",
 ]

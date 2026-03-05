@@ -1,20 +1,39 @@
-"""BDD tests for ado_workflows.comments — comment analysis and sanitization.
+"""BDD tests for ado_workflows.comments — comment analysis, sanitization, and writes.
 
 Covers:
 - TestSanitizeAdoResponse: Windows-1252 smart-quote fix (pure function)
 - TestAnalyzePRComments: thread fetching, categorization, author stats
+- TestPostComment: new comment thread creation via SDK
+- TestReplyToComment: reply to existing thread via SDK
+- TestResolveComments: batch thread resolution with partial success
 
 Public API surface (from src/ado_workflows/comments.py):
     sanitize_ado_response(raw_data: bytes | str) -> str
     analyze_pr_comments(client: AdoClient, pr_id: int, project: str,
                         repository: str) -> CommentAnalysis
+    post_comment(client: AdoClient, repository: str, pr_id: int,
+                 content: str, project: str, *, status: str = "active") -> int
+    reply_to_comment(client: AdoClient, repository: str, pr_id: int,
+                     thread_id: int, content: str, project: str) -> int
+    resolve_comments(client: AdoClient, repository: str, pr_id: int,
+                     thread_ids: list[int], project: str, *,
+                     status: str = "fixed") -> ResolveResult
 """
 
 from __future__ import annotations
 
 from unittest.mock import Mock
 
-from ado_workflows.comments import analyze_pr_comments, sanitize_ado_response
+import pytest
+from actionable_errors import ActionableError
+
+from ado_workflows.comments import (
+    analyze_pr_comments,
+    post_comment,
+    reply_to_comment,
+    resolve_comments,
+    sanitize_ado_response,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers for mock thread construction
@@ -650,4 +669,397 @@ class TestAnalyzePRComments:
         # Then: SDK method called with correct arguments
         client.git.get_threads.assert_called_once_with(
             "MyRepo", 42, project="MyProject"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6d — Comment write operations
+# ---------------------------------------------------------------------------
+
+
+class TestPostComment:
+    """
+    REQUIREMENT: post_comment() creates a new comment thread on a PR.
+
+    WHO: MCP tools posting AI analysis, review feedback, or status updates.
+    WHAT: Constructs Comment + GitPullRequestCommentThread, calls
+          client.git.create_thread(), returns the new thread ID, raises
+          ActionableError on failure.
+    WHY: Replaces az rest POST .../threads plus GUID-resolution subprocess.
+
+    MOCK BOUNDARY:
+        Mock:  client.git.create_thread
+        Real:  post_comment, model construction
+        Never: N/A
+    """
+
+    def test_valid_content_returns_thread_id(self) -> None:
+        """
+        Given valid content
+        When post_comment is called
+        Then returns thread ID from SDK response
+        """
+        # Given: a mock client whose create_thread returns a thread with id
+        client = Mock()
+        response = Mock()
+        response.id = 77
+        client.git.create_thread.return_value = response
+
+        # When: post_comment is called
+        result = post_comment(client, "Repo", 42, "Great work!", "Proj")
+
+        # Then: the thread ID is returned
+        assert result == 77, (
+            f"Expected thread_id=77, got {result}"
+        )
+
+    def test_custom_status_passed_to_sdk(self) -> None:
+        """
+        Given custom status
+        When post_comment is called
+        Then thread status matches
+        """
+        # Given: a mock client
+        client = Mock()
+        response = Mock()
+        response.id = 10
+        client.git.create_thread.return_value = response
+
+        # When: called with status="closed"
+        post_comment(client, "Repo", 42, "Closing note", "Proj", status="closed")
+
+        # Then: the SDK model has the custom status
+        call_args = client.git.create_thread.call_args
+        thread_model = call_args[0][0]  # first positional arg
+        assert thread_model.status == "closed", (
+            f"Expected thread status='closed', got {thread_model.status!r}"
+        )
+
+    def test_sdk_exception_raises_actionable_error(self) -> None:
+        """
+        Given the SDK raises an exception
+        When post_comment is called
+        Then raises ActionableError
+        """
+        # Given: a client whose create_thread raises
+        client = Mock()
+        client.git.create_thread.side_effect = Exception("403 Forbidden")
+
+        # When/Then: ActionableError is raised
+        with pytest.raises(ActionableError) as exc_info:
+            post_comment(client, "Repo", 42, "Test comment", "Proj")
+
+        error_msg = str(exc_info.value)
+        assert "403 Forbidden" in error_msg, (
+            f"Expected SDK error in ActionableError, got: {error_msg}"
+        )
+
+    def test_empty_content_raises_actionable_error(self) -> None:
+        """
+        Given empty content
+        When post_comment is called
+        Then raises ActionableError (input validation)
+        """
+        # Given: a mock client (won't be called)
+        client = Mock()
+
+        # When/Then: ActionableError raised for empty content
+        with pytest.raises(ActionableError) as exc_info:
+            post_comment(client, "Repo", 42, "", "Proj")
+
+        assert "content" in str(exc_info.value).lower(), (
+            f"Expected 'content' in error message, got: {exc_info.value}"
+        )
+
+    def test_whitespace_only_content_raises_actionable_error(self) -> None:
+        """
+        Given whitespace-only content
+        When post_comment is called
+        Then raises ActionableError (input validation)
+        """
+        # Given: a mock client (won't be called)
+        client = Mock()
+
+        # When/Then: ActionableError raised for whitespace content
+        with pytest.raises(ActionableError) as exc_info:
+            post_comment(client, "Repo", 42, "   \n\t  ", "Proj")
+
+        assert "content" in str(exc_info.value).lower(), (
+            f"Expected 'content' in error message, got: {exc_info.value}"
+        )
+
+
+class TestReplyToComment:
+    """
+    REQUIREMENT: reply_to_comment() adds a reply to an existing comment thread.
+
+    WHO: MCP tools replying to review feedback or continuing conversations.
+    WHAT: Constructs Comment with parent_comment_id=1, calls
+          client.git.create_comment(), returns the new comment ID, raises
+          ActionableError on failure.
+    WHY: Replaces az rest POST .../threads/{id}/comments plus
+         GUID-resolution subprocess.
+
+    MOCK BOUNDARY:
+        Mock:  client.git.create_comment
+        Real:  reply_to_comment, model construction
+        Never: N/A
+    """
+
+    def test_valid_reply_returns_comment_id(self) -> None:
+        """
+        Given valid thread_id and content
+        When reply_to_comment is called
+        Then returns comment ID
+        """
+        # Given: a mock client whose create_comment returns a comment with id
+        client = Mock()
+        response = Mock()
+        response.id = 5
+        client.git.create_comment.return_value = response
+
+        # When: reply_to_comment is called
+        result = reply_to_comment(client, "Repo", 42, 77, "Thanks!", "Proj")
+
+        # Then: the comment ID is returned
+        assert result == 5, (
+            f"Expected comment_id=5, got {result}"
+        )
+
+    def test_sdk_exception_raises_actionable_error(self) -> None:
+        """
+        Given the SDK raises an exception (e.g., thread not found)
+        When reply_to_comment is called
+        Then raises ActionableError
+        """
+        # Given: a client whose create_comment raises
+        client = Mock()
+        client.git.create_comment.side_effect = Exception(
+            "Thread 999 not found"
+        )
+
+        # When/Then: ActionableError is raised
+        with pytest.raises(ActionableError) as exc_info:
+            reply_to_comment(client, "Repo", 42, 999, "Reply text", "Proj")
+
+        error_msg = str(exc_info.value)
+        assert "Thread 999 not found" in error_msg, (
+            f"Expected SDK error in ActionableError, got: {error_msg}"
+        )
+
+    def test_empty_content_raises_actionable_error(self) -> None:
+        """
+        Given empty content
+        When reply_to_comment is called
+        Then raises ActionableError
+        """
+        # Given: a mock client (won't be called)
+        client = Mock()
+
+        # When/Then: ActionableError raised for empty content
+        with pytest.raises(ActionableError) as exc_info:
+            reply_to_comment(client, "Repo", 42, 77, "", "Proj")
+
+        assert "content" in str(exc_info.value).lower(), (
+            f"Expected 'content' in error message, got: {exc_info.value}"
+        )
+
+
+class TestResolveComments:
+    """
+    REQUIREMENT: resolve_comments() batch-resolves comment threads with
+    partial-success reporting.
+
+    WHO: MCP tools resolving addressed review comments in bulk.
+    WHAT: Iterates thread_ids, calls client.git.update_thread() with target
+          status, collects successes and failures, returns ResolveResult —
+          never raises on individual thread failure.
+    WHY: Preserves batch semantics and partial-success pattern. Replaces
+         az rest PATCH .../threads/{id} per-thread subprocess calls.
+
+    MOCK BOUNDARY:
+        Mock:  client.git.update_thread
+        Real:  resolve_comments, batch iteration, ResolveResult construction
+        Never: N/A
+    """
+
+    def test_all_threads_resolvable(self) -> None:
+        """
+        Given 3 thread IDs all resolvable
+        When resolve_comments is called
+        Then resolved=[1,2,3], failed=[], skipped=[]
+        """
+        # Given: a mock client where update_thread succeeds for all
+        # and get_threads returns threads with non-matching statuses
+        client = Mock()
+        threads = []
+        for tid in (1, 2, 3):
+            t = Mock()
+            t.id = tid
+            t.status = "active"  # not yet "fixed"
+            threads.append(t)
+        client.git.get_threads.return_value = threads
+        response = Mock()
+        response.status = "fixed"
+        client.git.update_thread.return_value = response
+
+        # When: called with 3 thread IDs
+        result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
+
+        # Then: all threads are in resolved
+        assert result.resolved == [1, 2, 3], (
+            f"Expected resolved=[1,2,3], got {result.resolved}"
+        )
+        assert result.failed == [], (
+            f"Expected failed=[], got {result.failed}"
+        )
+        assert result.skipped == [], (
+            f"Expected skipped=[], got {result.skipped}"
+        )
+
+    def test_partial_failure(self) -> None:
+        """
+        Given 1 of 3 threads fails
+        When resolve_comments is called
+        Then partial result: resolved=[1,3], failed=[2]
+        """
+        # Given: a mock client where thread 2 raises on update
+        client = Mock()
+        threads = []
+        for tid in (1, 2, 3):
+            t = Mock()
+            t.id = tid
+            t.status = "active"
+            threads.append(t)
+        client.git.get_threads.return_value = threads
+        success_response = Mock()
+        success_response.status = "fixed"
+        client.git.update_thread.side_effect = [
+            success_response,
+            Exception("Thread 2 locked"),
+            success_response,
+        ]
+
+        # When: called with 3 thread IDs
+        result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
+
+        # Then: thread 2 is in failed, others in resolved
+        assert result.resolved == [1, 3], (
+            f"Expected resolved=[1,3], got {result.resolved}"
+        )
+        assert result.failed == [2], (
+            f"Expected failed=[2], got {result.failed}"
+        )
+        assert result.skipped == [], (
+            f"Expected skipped=[], got {result.skipped}"
+        )
+
+    def test_thread_already_in_target_status_is_skipped(self) -> None:
+        """
+        Given a thread already in target status
+        When resolve_comments is called
+        Then it appears in skipped
+        """
+        # Given: a mock client where thread returns the target status already
+        client = Mock()
+        already_fixed = Mock()
+        already_fixed.status = "fixed"
+        # When the thread is already in the target status before we call
+        # update, the SDK still returns the thread — but it was already there.
+        # We detect this via a pre-check using get_threads or by the SDK
+        # returning the same status. Implementation detail: the production
+        # code fetches thread status first and skips if already matching.
+        client.git.get_threads.return_value = [already_fixed]
+        already_fixed.id = 10
+
+        new_response = Mock()
+        new_response.status = "fixed"
+        client.git.update_thread.return_value = new_response
+
+        # When: called with that thread ID
+        result = resolve_comments(client, "Repo", 42, [10], "Proj")
+
+        # Then: thread is in skipped
+        assert 10 in result.skipped, (
+            f"Expected thread 10 in skipped, got resolved={result.resolved}, "
+            f"skipped={result.skipped}"
+        )
+
+    def test_empty_thread_list(self) -> None:
+        """
+        Given empty thread list
+        When resolve_comments is called
+        Then all lists empty
+        """
+        # Given: a mock client
+        client = Mock()
+
+        # When: called with no thread IDs
+        result = resolve_comments(client, "Repo", 42, [], "Proj")
+
+        # Then: all result lists are empty
+        assert result.resolved == [], (
+            f"Expected resolved=[], got {result.resolved}"
+        )
+        assert result.failed == [], (
+            f"Expected failed=[], got {result.failed}"
+        )
+        assert result.skipped == [], (
+            f"Expected skipped=[], got {result.skipped}"
+        )
+
+    def test_custom_status_passed_to_sdk(self) -> None:
+        """
+        Given custom status "wontFix"
+        When resolve_comments is called
+        Then SDK called with that status
+        """
+        # Given: a mock client with thread not yet in target status
+        client = Mock()
+        t = Mock()
+        t.id = 1
+        t.status = "active"
+        client.git.get_threads.return_value = [t]
+        response = Mock()
+        response.status = "wontFix"
+        client.git.update_thread.return_value = response
+
+        # When: called with status="wontFix"
+        resolve_comments(
+            client, "Repo", 42, [1], "Proj", status="wontFix"
+        )
+
+        # Then: update_thread received the custom status
+        call_args = client.git.update_thread.call_args
+        thread_model = call_args[0][0]  # first positional arg
+        assert thread_model.status == "wontFix", (
+            f"Expected status='wontFix' in SDK model, got {thread_model.status!r}"
+        )
+
+    def test_all_threads_fail(self) -> None:
+        """
+        Given all threads fail
+        When resolve_comments is called
+        Then resolved=[], failed=[1,2,3]
+        """
+        # Given: a mock client where every update_thread raises
+        client = Mock()
+        threads = []
+        for tid in (1, 2, 3):
+            t = Mock()
+            t.id = tid
+            t.status = "active"
+            threads.append(t)
+        client.git.get_threads.return_value = threads
+        client.git.update_thread.side_effect = Exception("Service unavailable")
+
+        # When: called with 3 thread IDs
+        result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
+
+        # Then: all threads in failed, none in resolved
+        assert result.resolved == [], (
+            f"Expected resolved=[], got {result.resolved}"
+        )
+        assert result.failed == [1, 2, 3], (
+            f"Expected failed=[1,2,3], got {result.failed}"
         )

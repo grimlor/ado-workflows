@@ -1,23 +1,36 @@
-"""Comment analysis and response sanitization for Azure DevOps PRs.
+"""Comment analysis, response sanitization, and write operations for Azure DevOps PRs.
 
 Provides :func:`sanitize_ado_response` (pure utility for Windows-1252
-smart-quote fix) and :func:`analyze_pr_comments` (SDK-based thread
-analysis returning a typed :class:`~models.CommentAnalysis`).
+smart-quote fix), :func:`analyze_pr_comments` (SDK-based thread
+analysis returning a typed :class:`~models.CommentAnalysis`),
+:func:`post_comment`, :func:`reply_to_comment`, and
+:func:`resolve_comments` (SDK-based write operations).
 """
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
+
+from actionable_errors import ActionableError
 
 from ado_workflows.models import (
     AuthorSample,
     CommentAnalysis,
     CommentInfo,
     CommentSummary,
+    ResolveResult,
 )
 
 if TYPE_CHECKING:
     from ado_workflows.client import AdoClient
+
+from azure.devops.v7_1.git.models import (
+    Comment,
+    GitPullRequestCommentThread,
+)
+
+_log = logging.getLogger(__name__)
 
 
 def sanitize_ado_response(raw_data: bytes | str) -> str:
@@ -168,3 +181,164 @@ def analyze_pr_comments(
         active_comments=active_comments,
         resolution_ready=len(active_threads) == 0,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6d — Comment write operations
+# ---------------------------------------------------------------------------
+
+
+def post_comment(
+    client: AdoClient,
+    repository: str,
+    pr_id: int,
+    content: str,
+    project: str,
+    *,
+    status: str = "active",
+) -> int:
+    """Create a new comment thread on a pull request.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        pr_id: Pull request ID.
+        content: Comment body text (must not be empty).
+        project: Azure DevOps project name or GUID.
+        status: Thread status (default ``"active"``).
+
+    Returns:
+        The new thread ID.
+
+    Raises:
+        ActionableError: When *content* is empty/whitespace or the SDK fails.
+    """
+    if not content or not content.strip():
+        raise ActionableError.validation(
+            service="AzureDevOps",
+            field_name="content",
+            reason="Cannot post a comment with empty content.",
+        )
+
+    thread = GitPullRequestCommentThread(
+        comments=[Comment(content=content)],
+        status=status,
+    )
+
+    try:
+        response = client.git.create_thread(thread, repository, pr_id, project=project)
+    except Exception as exc:
+        raise ActionableError.connection(
+            service="AzureDevOps",
+            url=f"{repository}/pullrequests/{pr_id}/threads",
+            raw_error=str(exc),
+        ) from exc
+
+    return int(response.id)
+
+
+def reply_to_comment(
+    client: AdoClient,
+    repository: str,
+    pr_id: int,
+    thread_id: int,
+    content: str,
+    project: str,
+) -> int:
+    """Add a reply to an existing comment thread.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        pr_id: Pull request ID.
+        thread_id: Existing thread ID to reply to.
+        content: Reply body text (must not be empty).
+        project: Azure DevOps project name or GUID.
+
+    Returns:
+        The new comment ID.
+
+    Raises:
+        ActionableError: When *content* is empty/whitespace or the SDK fails.
+    """
+    if not content or not content.strip():
+        raise ActionableError.validation(
+            service="AzureDevOps",
+            field_name="content",
+            reason="Cannot reply with empty content.",
+        )
+
+    comment = Comment(content=content, parent_comment_id=1)
+
+    try:
+        response = client.git.create_comment(
+            comment, repository, pr_id, thread_id, project=project,
+        )
+    except Exception as exc:
+        raise ActionableError.connection(
+            service="AzureDevOps",
+            url=f"{repository}/pullrequests/{pr_id}/threads/{thread_id}/comments",
+            raw_error=str(exc),
+        ) from exc
+
+    return int(response.id)
+
+
+def resolve_comments(
+    client: AdoClient,
+    repository: str,
+    pr_id: int,
+    thread_ids: list[int],
+    project: str,
+    *,
+    status: str = "fixed",
+) -> ResolveResult:
+    """Batch-resolve comment threads with partial-success reporting.
+
+    Iterates *thread_ids* and calls ``client.git.update_thread()`` for
+    each.  Threads already in the target status are skipped.  Individual
+    failures are collected — the function never raises on a single thread
+    failure.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        pr_id: Pull request ID.
+        thread_ids: Thread IDs to resolve.
+        project: Azure DevOps project name or GUID.
+        status: Target thread status (default ``"fixed"``).
+
+    Returns:
+        A :class:`~models.ResolveResult` partitioning threads into
+        *resolved*, *failed*, and *skipped*.
+    """
+    resolved: list[int] = []
+    failed: list[int] = []
+    skipped: list[int] = []
+
+    if not thread_ids:
+        return ResolveResult(resolved=resolved, failed=failed, skipped=skipped)
+
+    # Fetch current thread statuses for skip detection
+    all_threads: list[Any] = client.git.get_threads(
+        repository, pr_id, project=project,
+    )
+    current_status: dict[int, str] = {t.id: t.status for t in all_threads}
+
+    for tid in thread_ids:
+        # Skip threads already in the target status
+        if current_status.get(tid) == status:
+            skipped.append(tid)
+            continue
+
+        thread_update = GitPullRequestCommentThread(status=status)
+        try:
+            client.git.update_thread(
+                thread_update, repository, pr_id, tid, project=project,
+            )
+            resolved.append(tid)
+        except Exception:
+            _log.warning("Failed to resolve thread %d on PR %d", tid, pr_id)
+            failed.append(tid)
+
+    return ResolveResult(resolved=resolved, failed=failed, skipped=skipped)

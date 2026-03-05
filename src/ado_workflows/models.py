@@ -161,3 +161,34 @@ class CommentAnalysis:
     author_samples: dict[str, AuthorSample]
     active_comments: list[CommentInfo]
     resolution_ready: bool
+
+
+# ---------------------------------------------------------------------------
+# Phase 6d — PR write operation types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CreatedPR:
+    """Result of :func:`lifecycle.create_pull_request`."""
+
+    pr_id: int
+    url: str
+    title: str
+    source_branch: str
+    target_branch: str
+    is_draft: bool
+
+
+@dataclass
+class ResolveResult:
+    """Batch thread-resolution outcome.
+
+    Returned by :func:`comments.resolve_comments`.  Threads are
+    partitioned into *resolved* (status changed), *failed* (SDK error),
+    and *skipped* (already in target status).
+    """
+
+    resolved: list[int]
+    failed: list[int]
+    skipped: list[int]
