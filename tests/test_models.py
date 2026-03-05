@@ -267,7 +267,7 @@ class TestApprovalStatusConstruction:
     WHAT: Eight fields: is_approved, needs_approvals_count, has_rejection, and five
           typed lists of VoteStatus (valid, invalidated, rejecting, waiting, pending).
     WHY: Replaces untyped Dict[str, Any] from PDP. Enables IDE autocompletion and
-         mypy validation of approval state access patterns.
+         pyright validation of approval state access patterns.
 
     MOCK BOUNDARY:
         Mock:  nothing — dataclass construction

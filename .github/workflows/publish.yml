@@ -27,7 +27,7 @@ jobs:
         run: uv run ruff check src/ tests/
 
       - name: Type check
-        run: uv run mypy src/
+        run: uv run pyright src/ tests/
 
       - name: Test
         run: uv run pytest --cov=ado_workflows --cov-report=term-missing
