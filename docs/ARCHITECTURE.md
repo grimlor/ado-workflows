@@ -34,7 +34,7 @@ ado_workflows/
 ├── client.py        AdoClient — typed, lazy-cached git/core/work_items properties
 ├── context.py       Layer 2: RepositoryContext (thread-safe caching)
 ├── pr.py            Layer 3: AzureDevOpsPRContext + establish_pr_context factory
-├── review.py        Layer 3: get_review_status, fetch_required_approvals, fetch_vote_timestamps
+├── review.py        Layer 3: get_review_status, analyze_pending_reviews, fetch helpers
 ├── comments.py      Layer 3: analyze_pr_comments, post_comment, reply_to_comment, resolve_comments
 ├── votes.py         Pure: determine_vote_status, deduplicate_team_containers
 ├── lifecycle.py     Layer 3: create_pull_request (future: update, complete)
@@ -111,6 +111,14 @@ per-org URL.
 
 ### Partial-Success Operations
 
-Batch operations like `resolve_comments()` use partial-success semantics — individual
-thread failures are collected, not raised. The caller receives a `ResolveResult` with
-`resolved`, `failed`, and `skipped` lists, enabling informed retry decisions.
+Batch operations like `resolve_comments()` and `analyze_pending_reviews()` use
+partial-success semantics — individual failures are collected, not raised. The
+caller receives a result container with structured success/failure lists:
+
+- `ResolveResult` — `resolved`, `failed`, and `skipped` thread ID lists
+- `PendingReviewResult` — `pending_prs` and `skipped` (with `ActionableError`
+  entries for each per-PR enrichment failure)
+
+This two-tier error pattern (Raise for non-recoverable, Collect for partial
+success) is used consistently across all operations that iterate over multiple
+items.

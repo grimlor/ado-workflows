@@ -33,7 +33,7 @@ Or individually:
 ```bash
 task lint           # ruff check src/ tests/
 task format         # ruff format src/ tests/
-task type           # mypy strict mode
+task type           # pyright type checking
 task test           # pytest -v
 task cov            # pytest with coverage report
 ```
@@ -43,7 +43,7 @@ task cov            # pytest with coverage report
 - **Python 3.12+** — use modern syntax (`X | Y` unions, `@dataclass`).
 - **`from __future__ import annotations`** at the top of every module.
 - **ruff** handles formatting and import sorting. Don't fight it.
-- **mypy strict** — all functions need type annotations. No `Any` unless
+- **pyright** — all functions need type annotations. No `Any` unless
   you have a good reason and document it.
 - **Line length:** 99 characters (configured in `pyproject.toml`).
 - **Quote style:** double quotes.
