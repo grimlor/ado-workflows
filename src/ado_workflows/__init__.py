@@ -39,6 +39,7 @@ from ado_workflows.models import (
     CommentSummary,
     CreatedPR,
     PendingPR,
+    PendingReviewResult,
     ResolveResult,
     ReviewerInfo,
     ReviewStatus,
@@ -47,6 +48,7 @@ from ado_workflows.models import (
 from ado_workflows.parsing import parse_ado_date, parse_ado_url
 from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context
 from ado_workflows.review import (
+    analyze_pending_reviews,
     fetch_required_approvals,
     fetch_vote_timestamps,
     get_review_status,
@@ -66,11 +68,13 @@ __all__: list[str] = [
     "ConnectionFactory",
     "CreatedPR",
     "PendingPR",
+    "PendingReviewResult",
     "RepositoryContext",
     "ResolveResult",
     "ReviewStatus",
     "ReviewerInfo",
     "VoteStatus",
+    "analyze_pending_reviews",
     "analyze_pr_comments",
     "clear_repository_context",
     "create_pull_request",

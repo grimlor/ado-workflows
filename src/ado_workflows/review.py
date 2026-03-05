@@ -2,8 +2,9 @@
 
 Provides :func:`fetch_required_approvals` (policy-based minimum reviewer
 count), :func:`fetch_vote_timestamps` (undocumented thread-property
-extraction for per-reviewer vote datetimes), and :func:`get_review_status`
-(end-to-end PR review status computation).
+extraction for per-reviewer vote datetimes), :func:`get_review_status`
+(end-to-end PR review status computation), and
+:func:`analyze_pending_reviews` (list active PRs needing attention).
 
 All functions interact with the Azure DevOps SDK via :class:`~client.AdoClient`.
 """
@@ -11,12 +12,19 @@ All functions interact with the Azure DevOps SDK via :class:`~client.AdoClient`.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from actionable_errors import ActionableError
+from azure.devops.v7_1.git.models import GitPullRequestSearchCriteria
 
-from ado_workflows.models import ApprovalStatus, ReviewStatus
+from ado_workflows.models import (
+    ApprovalStatus,
+    PendingPR,
+    PendingReviewResult,
+    ReviewerInfo,
+    ReviewStatus,
+)
 from ado_workflows.votes import deduplicate_team_containers, determine_vote_status
 
 if TYPE_CHECKING:
@@ -318,6 +326,226 @@ def get_review_status(
         approval_status=approval_status,
         summary=summary,
         warnings=warnings,
+    )
+
+
+def analyze_pending_reviews(
+    client: AdoClient,
+    project: str,
+    repository: str,
+    *,
+    max_days_old: int = 30,
+    creator_filter: str | None = None,
+    default_required_approvals: int = 2,
+) -> PendingReviewResult:
+    """List active PRs that still need reviewer attention.
+
+    Fetches active non-draft PRs, applies age and creator filters,
+    then enriches each PR with staleness detection, team-container
+    deduplication, and policy-based approval counts.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        project: Azure DevOps project name or GUID.
+        repository: Repository name or GUID.
+        max_days_old: Exclude PRs older than this many days.  Default ``30``.
+        creator_filter: Optional substring match (case-insensitive) on
+            ``created_by.unique_name``.  ``None`` means no filter.
+        default_required_approvals: Fallback reviewer count when no
+            branch policy is configured.  Default ``2``.
+
+    Returns:
+        A :class:`~models.PendingReviewResult` with ``pending_prs``
+        sorted by ``days_open`` descending and any enrichment failures
+        in ``skipped``.
+
+    Raises:
+        ActionableError: When the PR listing API call fails.
+    """
+    # Step 1 — Fetch active PRs
+    criteria = GitPullRequestSearchCriteria(status="active")
+    try:
+        all_prs: list[Any] = client.git.get_pull_requests(
+            repository, criteria, project=project,
+        )
+    except Exception as exc:
+        raise ActionableError.connection(
+            service="AzureDevOps",
+            url=f"{project}/{repository}/pullRequests",
+            raw_error=str(exc),
+        ) from exc
+
+    # Step 2 — Filter: drafts, age, creator
+    now = datetime.now(tz=UTC)
+    cutoff = now - timedelta(days=max_days_old)
+    pending_prs: list[PendingPR] = []
+    skipped: list[ActionableError] = []
+
+    for pr in all_prs:
+        if pr.is_draft:
+            continue
+
+        if pr.creation_date is None:
+            continue
+
+        creation: datetime = pr.creation_date
+        if creation < cutoff:
+            continue
+
+        author: str = pr.created_by.unique_name or ""
+        if creator_filter and creator_filter.lower() not in author.lower():
+            continue
+
+        # Step 3 — Per-PR enrichment (wrapped in try/except)
+        try:
+            pending_pr = _enrich_pr(
+                client, pr, project, repository,
+                default_required_approvals=default_required_approvals,
+                now=now,
+            )
+        except Exception as exc:
+            pr_id: int = pr.pull_request_id
+            skipped.append(ActionableError.internal(
+                service="AzureDevOps",
+                operation=f"enrich_pr({pr_id})",
+                raw_error=str(exc),
+            ))
+            continue
+
+        # Step 4 — Only include PRs that still need attention
+        if pending_pr is not None:
+            pending_prs.append(pending_pr)
+
+    # Step 5 — Sort by days_open descending (oldest first)
+    pending_prs.sort(key=lambda p: p.days_open, reverse=True)
+
+    return PendingReviewResult(pending_prs=pending_prs, skipped=skipped)
+
+
+def _enrich_pr(
+    client: AdoClient,
+    pr: Any,
+    project: str,
+    repository: str,
+    *,
+    default_required_approvals: int,
+    now: datetime,
+) -> PendingPR | None:
+    """Enrich a single PR with vote classification and approval counts.
+
+    Returns ``None`` if the PR is fully approved and needs no attention.
+    """
+    pr_id: int = pr.pull_request_id
+
+    # Fetch commits (latest commit date for staleness detection)
+    commits: list[Any] = client.git.get_pull_request_commits(
+        repository, pr_id, project=project,
+    )
+    last_commit_date: datetime | None = None
+    if commits:
+        last_commit_date = max(c.author.date for c in commits)
+
+    # Extract stale voter IDs from PR properties
+    stale_voter_ids: set[str] = set()
+    try:
+        properties: dict[str, Any] = client.git.get_pull_request_properties(
+            repository, pr_id, project=project,
+        )
+        prop_value: dict[str, Any] = properties.get("value") or {}
+        one_review = prop_value.get("OneReviewPolicyPilot")
+        if one_review:
+            raw_json: str = one_review.get("$value", "")
+            if raw_json:
+                parsed = json.loads(raw_json)
+                stale_voter_ids = set(parsed.get("staleBecauseOfPush", []))
+    except Exception:
+        pass  # properties are optional enrichment
+
+    # Fetch vote timestamps from thread properties
+    vote_timestamps = fetch_vote_timestamps(client, repository, pr_id, project)
+
+    # Classify each reviewer's vote
+    reviewers: list[Any] = pr.reviewers or []
+    vote_statuses = [
+        determine_vote_status(
+            reviewer,
+            stale_voter_ids=stale_voter_ids or None,
+            vote_timestamps=vote_timestamps or None,
+            latest_commit_date=last_commit_date,
+        )
+        for reviewer in reviewers
+    ]
+
+    # Deduplicate team containers
+    vote_statuses = deduplicate_team_containers(vote_statuses)
+
+    # Fetch required approvals
+    try:
+        required = fetch_required_approvals(
+            client, project, pr_id,
+            default_required_approvals=default_required_approvals,
+        )
+    except ActionableError:
+        required = default_required_approvals
+
+    # Compute approval counts
+    valid_approvers = [
+        vs for vs in vote_statuses
+        if vs.vote in (10, 5) and not vs.vote_invalidated
+    ]
+    valid_count = len(valid_approvers)
+    needs = max(0, required - valid_count)
+
+    has_rejection = any(vs.vote == -10 for vs in vote_statuses)
+    is_approved = valid_count >= required and not has_rejection
+
+    # Identify pending (non-container) reviewers with vote == 0
+    pending_reviewers = [
+        ReviewerInfo(
+            display_name=vs.name,
+            unique_name=vs.email,
+            vote=vs.vote,
+            is_required=True,
+            is_container=vs.is_container,
+        )
+        for vs in vote_statuses
+        if vs.vote == 0 and not vs.is_container
+    ]
+
+    # Skip if fully approved and no attention needed
+    if is_approved and not pending_reviewers and needs == 0:
+        return None
+
+    creation: datetime = pr.creation_date
+    days_open = (now - creation).days
+    merge_status: str = pr.merge_status or "unknown"
+
+    # Build web URL from API URL
+    web_url: str = pr.url or ""
+
+    # Extract organization from URL
+    org = ""
+    url_str: str = pr.url or ""
+    if "dev.azure.com/" in url_str:
+        parts = url_str.split("dev.azure.com/")
+        if len(parts) > 1:
+            org = parts[1].split("/")[0]
+
+    return PendingPR(
+        pr_id=pr_id,
+        title=pr.title or "",
+        author=pr.created_by.unique_name or "",
+        creation_date=creation,
+        repository=repository,
+        organization=org,
+        project=project,
+        web_url=web_url,
+        pending_reviewers=pending_reviewers,
+        days_open=days_open,
+        merge_status=merge_status,
+        has_conflicts=merge_status == "conflicts",
+        needs_approvals_count=needs,
+        valid_approvals_count=valid_count,
     )
 
 

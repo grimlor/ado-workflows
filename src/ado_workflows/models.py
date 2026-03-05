@@ -197,3 +197,21 @@ class ResolveResult:
     resolved: list[int]
     errors: list[ActionableError]
     skipped: list[int]
+
+
+# ---------------------------------------------------------------------------
+# Phase 6e — Pending review analysis types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PendingReviewResult:
+    """Result container for pending review analysis.
+
+    Returned by :func:`review.analyze_pending_reviews`.  Surfaces both
+    successful results and per-PR enrichment failures so callers can
+    report partial-success diagnostics.
+    """
+
+    pending_prs: list[PendingPR]
+    skipped: list[ActionableError]
