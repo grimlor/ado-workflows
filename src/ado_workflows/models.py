@@ -6,11 +6,13 @@ and :mod:`comments` modules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+    from actionable_errors import ActionableError
 
 VOTE_TEXT: dict[int, str] = {
     10: "Approved",
@@ -100,7 +102,8 @@ class ReviewStatus:
     """Full review status for a single PR.
 
     Returned by :func:`review.get_review_status`.  Contains PR metadata,
-    nested :class:`ApprovalStatus`, and a human-readable summary.
+    nested :class:`ApprovalStatus`, a human-readable summary, and any
+    non-fatal enrichment warnings.
     """
 
     pr_id: int
@@ -111,6 +114,7 @@ class ReviewStatus:
     last_commit_date: datetime | None
     approval_status: ApprovalStatus
     summary: str
+    warnings: list[ActionableError] = field(default_factory=list)
 
 
 @dataclass
@@ -185,10 +189,11 @@ class ResolveResult:
     """Batch thread-resolution outcome.
 
     Returned by :func:`comments.resolve_comments`.  Threads are
-    partitioned into *resolved* (status changed), *failed* (SDK error),
+    partitioned into *resolved* (status changed), *errors* (SDK error,
+    as :class:`ActionableError` with ``context={"thread_id": tid}``),
     and *skipped* (already in target status).
     """
 
     resolved: list[int]
-    failed: list[int]
+    errors: list[ActionableError]
     skipped: list[int]

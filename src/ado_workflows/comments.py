@@ -9,7 +9,6 @@ analysis returning a typed :class:`~models.CommentAnalysis`),
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from actionable_errors import ActionableError
@@ -29,8 +28,6 @@ from azure.devops.v7_1.git.models import (
     Comment,
     GitPullRequestCommentThread,
 )
-
-_log = logging.getLogger(__name__)
 
 
 def sanitize_ado_response(raw_data: bytes | str) -> str:
@@ -310,14 +307,14 @@ def resolve_comments(
 
     Returns:
         A :class:`~models.ResolveResult` partitioning threads into
-        *resolved*, *failed*, and *skipped*.
+        *resolved*, *errors*, and *skipped*.
     """
     resolved: list[int] = []
-    failed: list[int] = []
+    errors: list[ActionableError] = []
     skipped: list[int] = []
 
     if not thread_ids:
-        return ResolveResult(resolved=resolved, failed=failed, skipped=skipped)
+        return ResolveResult(resolved=resolved, errors=errors, skipped=skipped)
 
     # Fetch current thread statuses for skip detection
     all_threads: list[Any] = client.git.get_threads(
@@ -337,8 +334,13 @@ def resolve_comments(
                 thread_update, repository, pr_id, tid, project=project,
             )
             resolved.append(tid)
-        except Exception:
-            _log.warning("Failed to resolve thread %d on PR %d", tid, pr_id)
-            failed.append(tid)
+        except Exception as exc:
+            err = ActionableError.internal(
+                service="AzureDevOps",
+                operation=f"resolve_thread({tid})",
+                raw_error=str(exc),
+            )
+            err.context = {"thread_id": tid}
+            errors.append(err)
 
-    return ResolveResult(resolved=resolved, failed=failed, skipped=skipped)
+    return ResolveResult(resolved=resolved, errors=errors, skipped=skipped)

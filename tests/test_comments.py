@@ -873,9 +873,14 @@ class TestResolveComments:
     WHO: MCP tools resolving addressed review comments in bulk.
     WHAT: Iterates thread_ids, calls client.git.update_thread() with target
           status, collects successes and failures, returns ResolveResult —
-          never raises on individual thread failure.
+          never raises on individual thread failure. Per-thread failures are
+          captured as ActionableError.internal() instances with
+          context={"thread_id": tid} in ResolveResult.errors, so the consumer
+          knows both which threads failed and why.
     WHY: Preserves batch semantics and partial-success pattern. Replaces
-         az rest PATCH .../threads/{id} per-thread subprocess calls.
+         az rest PATCH .../threads/{id} per-thread subprocess calls. Surfacing
+         structured errors (not just IDs) ensures callers can report meaningful
+         diagnostics.
 
     MOCK BOUNDARY:
         Mock:  client.git.update_thread
@@ -887,7 +892,7 @@ class TestResolveComments:
         """
         Given 3 thread IDs all resolvable
         When resolve_comments is called
-        Then resolved=[1,2,3], failed=[], skipped=[]
+        Then resolved=[1,2,3], errors=[], skipped=[]
         """
         # Given: a mock client where update_thread succeeds for all
         # and get_threads returns threads with non-matching statuses
@@ -910,8 +915,8 @@ class TestResolveComments:
         assert result.resolved == [1, 2, 3], (
             f"Expected resolved=[1,2,3], got {result.resolved}"
         )
-        assert result.failed == [], (
-            f"Expected failed=[], got {result.failed}"
+        assert result.errors == [], (
+            f"Expected errors=[], got {result.errors}"
         )
         assert result.skipped == [], (
             f"Expected skipped=[], got {result.skipped}"
@@ -921,7 +926,8 @@ class TestResolveComments:
         """
         Given 1 of 3 threads fails
         When resolve_comments is called
-        Then partial result: resolved=[1,3], failed=[2]
+        Then partial result: resolved=[1,3], errors contains one ActionableError
+             with context={"thread_id": 2}
         """
         # Given: a mock client where thread 2 raises on update
         client = Mock()
@@ -943,12 +949,18 @@ class TestResolveComments:
         # When: called with 3 thread IDs
         result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
 
-        # Then: thread 2 is in failed, others in resolved
+        # Then: thread 2 is in errors, others in resolved
         assert result.resolved == [1, 3], (
             f"Expected resolved=[1,3], got {result.resolved}"
         )
-        assert result.failed == [2], (
-            f"Expected failed=[2], got {result.failed}"
+        assert len(result.errors) == 1, (
+            f"Expected 1 error, got {len(result.errors)}"
+        )
+        assert isinstance(result.errors[0], ActionableError), (
+            f"Expected ActionableError, got {type(result.errors[0])}"
+        )
+        assert result.errors[0].context == {"thread_id": 2}, (
+            f"Expected context with thread_id=2, got {result.errors[0].context}"
         )
         assert result.skipped == [], (
             f"Expected skipped=[], got {result.skipped}"
@@ -1001,8 +1013,8 @@ class TestResolveComments:
         assert result.resolved == [], (
             f"Expected resolved=[], got {result.resolved}"
         )
-        assert result.failed == [], (
-            f"Expected failed=[], got {result.failed}"
+        assert result.errors == [], (
+            f"Expected errors=[], got {result.errors}"
         )
         assert result.skipped == [], (
             f"Expected skipped=[], got {result.skipped}"
@@ -1040,7 +1052,8 @@ class TestResolveComments:
         """
         Given all threads fail
         When resolve_comments is called
-        Then resolved=[], failed=[1,2,3]
+        Then resolved=[], errors contains three ActionableError instances
+             with corresponding thread_ids in context
         """
         # Given: a mock client where every update_thread raises
         client = Mock()
@@ -1056,10 +1069,21 @@ class TestResolveComments:
         # When: called with 3 thread IDs
         result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
 
-        # Then: all threads in failed, none in resolved
+        # Then: all threads in errors, none in resolved
         assert result.resolved == [], (
             f"Expected resolved=[], got {result.resolved}"
         )
-        assert result.failed == [1, 2, 3], (
-            f"Expected failed=[1,2,3], got {result.failed}"
+        assert len(result.errors) == 3, (
+            f"Expected 3 errors, got {len(result.errors)}"
+        )
+        for err in result.errors:
+            assert err.context is not None, (
+                "Expected context to be set on each error"
+            )
+        error_thread_ids = [
+            e.context["thread_id"] for e in result.errors
+            if e.context is not None
+        ]
+        assert error_thread_ids == [1, 2, 3], (
+            f"Expected thread_ids [1,2,3], got {error_thread_ids}"
         )

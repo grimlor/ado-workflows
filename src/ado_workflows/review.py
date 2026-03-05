@@ -11,7 +11,6 @@ All functions interact with the Azure DevOps SDK via :class:`~client.AdoClient`.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -22,8 +21,6 @@ from ado_workflows.votes import deduplicate_team_containers, determine_vote_stat
 
 if TYPE_CHECKING:
     from ado_workflows.client import AdoClient
-
-_log = logging.getLogger(__name__)
 
 
 def fetch_required_approvals(
@@ -39,19 +36,21 @@ def fetch_required_approvals(
     Looks for a *Minimum number of reviewers* policy type and extracts
     ``configuration.settings["minimumApproverCount"]``.
 
-    Falls back to *default_required_approvals* if no matching policy is
-    found **or** if the API call raises any exception (non-critical
-    enrichment — errors are logged and swallowed).
+    Returns *default_required_approvals* when no matching policy is found.
 
     Args:
         client: An authenticated :class:`~client.AdoClient`.
         project: Azure DevOps project name or GUID.
         pr_id: Pull request ID.
         default_required_approvals: Fallback count when no policy is
-            found or the API is unreachable.  Default ``2``.
+            found.  Default ``2``.
 
     Returns:
         The minimum required reviewer count.
+
+    Raises:
+        ActionableError: When the policy API call fails.  The caller
+            decides whether to use the default and surface a warning.
     """
     artifact_id = f"vstfs:///CodeReview/CodeReviewId/{project}/{pr_id}"
 
@@ -59,13 +58,17 @@ def fetch_required_approvals(
         evaluations: list[Any] = client.policy.get_policy_evaluations(
             project, artifact_id,
         )
-    except Exception:
-        _log.debug(
-            "Policy API call failed for PR %d; using default %d",
-            pr_id,
-            default_required_approvals,
-        )
-        return default_required_approvals
+    except Exception as exc:
+        raise ActionableError.internal(
+            service="AzureDevOps",
+            operation=f"fetch_required_approvals(PR {pr_id})",
+            raw_error=str(exc),
+            suggestion=(
+                f"Policy API unavailable for PR {pr_id}; "
+                f"caller should fall back to default of "
+                f"{default_required_approvals} approvals."
+            ),
+        ) from exc
 
     for evaluation in evaluations:
         display_name: str = evaluation.configuration.type.display_name
@@ -209,6 +212,7 @@ def get_review_status(
         last_commit_date = max(c.author.date for c in commits)
 
     # Step 3 — Extract stale voter IDs from PR properties
+    warnings: list[ActionableError] = []
     stale_voter_ids: set[str] = set()
     try:
         properties: dict[str, Any] = client.git.get_pull_request_properties(
@@ -221,8 +225,17 @@ def get_review_status(
             if raw_json:
                 parsed = json.loads(raw_json)
                 stale_voter_ids = set(parsed.get("staleBecauseOfPush", []))
-    except Exception:
-        _log.debug("Could not fetch PR properties for staleness; skipping")
+    except Exception as exc:
+        warnings.append(ActionableError.internal(
+            service="AzureDevOps",
+            operation=f"get_pull_request_properties(PR {pr_id})",
+            raw_error=str(exc),
+            suggestion=(
+                "PR properties unavailable; tier-1 staleness detection "
+                "(OneReviewPolicyPilot) skipped. Tier-2 (vote timestamp "
+                "comparison) still active."
+            ),
+        ))
 
     # Step 4 — Fetch vote timestamps from thread properties
     vote_timestamps = fetch_vote_timestamps(client, repository, pr_id, project)
@@ -243,10 +256,14 @@ def get_review_status(
     vote_statuses = deduplicate_team_containers(vote_statuses)
 
     # Step 7 — Fetch required approvals
-    required = fetch_required_approvals(
-        client, project, pr_id,
-        default_required_approvals=default_required_approvals,
-    )
+    try:
+        required = fetch_required_approvals(
+            client, project, pr_id,
+            default_required_approvals=default_required_approvals,
+        )
+    except ActionableError as warning:
+        warnings.append(warning)
+        required = default_required_approvals
 
     # Step 8 — Compute approval status
     valid_approvers = [
@@ -300,6 +317,7 @@ def get_review_status(
         last_commit_date=last_commit_date,
         approval_status=approval_status,
         summary=summary,
+        warnings=warnings,
     )
 
 

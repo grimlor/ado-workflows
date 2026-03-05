@@ -1,7 +1,7 @@
 """BDD tests for ado_workflows.review — review helpers and orchestrator.
 
 Covers:
-- TestFetchRequiredApprovals: policy evaluation parsing, defaults, error swallowing
+- TestFetchRequiredApprovals: policy evaluation parsing, defaults, error surfacing
 - TestFetchVoteTimestamps: thread property extraction, dedup, malformed data
 - TestGetReviewStatus: end-to-end orchestrator with all system layers running real
 
@@ -181,8 +181,9 @@ class TestFetchRequiredApprovals:
           Searches evaluation results for a policy whose
           configuration.type.display_name contains "Minimum number of reviewers".
           Extracts configuration.settings["minimumApproverCount"].
-          Returns default_required_approvals if no matching policy is found or
-          if the API call fails (swallows exceptions).
+          Returns default_required_approvals if no matching policy is found.
+          Raises ActionableError if the API call fails, so the caller can
+          decide whether to use the default and surface the failure.
     WHY: Different repositories have different branch policies. A configurable
          default handles repos without policies, while the SDK call handles
          repos with them.
@@ -248,22 +249,22 @@ class TestFetchRequiredApprovals:
             f"Expected default 2 for empty evaluations, got {result}"
         )
 
-    def test_api_exception_returns_default(self) -> None:
+    def test_api_exception_raises_actionable_error(self) -> None:
         """
         Given the policy API raises an exception
         When fetch_required_approvals is called
-        Then it returns default_required_approvals (no propagation)
+        Then it raises ActionableError so the caller can decide on fallback
         """
         # Given: the policy API raises RuntimeError
         client = Mock()
         client.policy.get_policy_evaluations.side_effect = RuntimeError("API down")
 
-        # When: fetch_required_approvals is called
-        result = fetch_required_approvals(client, "MyProject", 42)
+        # When/Then: ActionableError is raised
+        with pytest.raises(ActionableError) as exc_info:
+            fetch_required_approvals(client, "MyProject", 42)
 
-        # Then: the default is returned without raising
-        assert result == 2, (
-            f"Expected default 2 on API failure, got {result}"
+        assert "API down" in str(exc_info.value), (
+            f"Expected raw error in message, got: {exc_info.value}"
         )
 
     def test_custom_default_returned_when_no_policy(self) -> None:
@@ -552,8 +553,11 @@ class TestGetReviewStatus:
           fetch required approvals, compute approval status and build summary.
           Returns a ReviewStatus dataclass.
           Raises ActionableError for unrecoverable errors (PR not found, auth).
+          Catches recoverable enrichment failures (policy lookup, PR properties)
+          and surfaces them as ActionableError instances in ReviewStatus.warnings.
     WHY: This is the primary read operation for PR review workflows. PDP's
-         version used 20 subprocess calls; this uses 4-5 SDK calls.
+         version used 20 subprocess calls; this uses 4-5 SDK calls. Surfacing
+         warnings rather than logging them ensures consumers can report degradation.
 
     MOCK BOUNDARY:
         Mock:  client.git.get_pull_request_by_id,
@@ -967,4 +971,55 @@ class TestGetReviewStatus:
         )
         assert len(result.approval_status.invalidated_approvers) == 0, (
             "Expected no invalidated approvers when properties unavailable"
+        )
+        # And: the failure is surfaced as a warning
+        assert len(result.warnings) == 1, (
+            f"Expected 1 warning for properties failure, got {len(result.warnings)}"
+        )
+        assert "get_pull_request_properties" in str(result.warnings[0]), (
+            f"Expected properties operation in warning, got: {result.warnings[0]}"
+        )
+
+    def test_policy_api_failure_produces_warning(self) -> None:
+        """
+        Given policy API fails during enrichment
+        When get_review_status is called
+        Then ReviewStatus.warnings contains an ActionableError,
+             approval uses default count
+        """
+        # Given: a PR with 1 approved reviewer, but policy API fails
+        reviewers = [
+            _make_reviewer(
+                display_name="Alice", reviewer_id="guid-a", vote=10,
+            ),
+        ]
+        commit = _make_commit(
+            author_date=datetime(2025, 6, 10, tzinfo=UTC),
+        )
+        client = _mock_full_client(
+            reviewers=reviewers, commits=[commit],
+            policy_evaluations=[],  # not used — will fail first
+        )
+        # Simulate policy API failure
+        client.policy.get_policy_evaluations.side_effect = RuntimeError(
+            "Policy service unavailable",
+        )
+
+        # When: get_review_status is called
+        result = get_review_status(client, 42, "MyProject", "MyRepo")
+
+        # Then: approval uses default count (2), so 1 approver is not enough
+        assert result.approval_status.is_approved is False, (
+            "Expected not approved when using default of 2 with only 1 approver"
+        )
+        assert result.approval_status.needs_approvals_count == 1, (
+            f"Expected needs_approvals_count=1, got "
+            f"{result.approval_status.needs_approvals_count}"
+        )
+        # And: the failure is surfaced as a warning
+        assert len(result.warnings) == 1, (
+            f"Expected 1 warning for policy failure, got {len(result.warnings)}"
+        )
+        assert "fetch_required_approvals" in str(result.warnings[0]), (
+            f"Expected fetch_required_approvals in warning, got: {result.warnings[0]}"
         )
