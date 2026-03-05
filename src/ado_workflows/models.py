@@ -1,7 +1,7 @@
 """Domain types for Azure DevOps PR workflows.
 
-Data containers with no business logic — used by :mod:`votes` and Phase 6c
-read/write operations.
+Data containers with no business logic — used by :mod:`votes`, :mod:`review`,
+and :mod:`comments` modules.
 """
 
 from __future__ import annotations
@@ -70,3 +70,94 @@ class PendingPR:
     has_conflicts: bool
     needs_approvals_count: int = 0
     valid_approvals_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 6c — review and comment analysis types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ApprovalStatus:
+    """Computed approval state for a PR.
+
+    Categorised lists of :class:`VoteStatus` instances, plus aggregate
+    approval/rejection flags used by :func:`review.get_review_status`.
+    """
+
+    is_approved: bool
+    needs_approvals_count: int
+    has_rejection: bool
+    valid_approvers: list[VoteStatus]
+    invalidated_approvers: list[VoteStatus]
+    rejecting_reviewers: list[VoteStatus]
+    waiting_reviewers: list[VoteStatus]
+    pending_reviewers: list[VoteStatus]
+
+
+@dataclass
+class ReviewStatus:
+    """Full review status for a single PR.
+
+    Returned by :func:`review.get_review_status`.  Contains PR metadata,
+    nested :class:`ApprovalStatus`, and a human-readable summary.
+    """
+
+    pr_id: int
+    title: str
+    author: str
+    url: str
+    days_open: int
+    last_commit_date: datetime | None
+    approval_status: ApprovalStatus
+    summary: str
+
+
+@dataclass
+class CommentSummary:
+    """Thread count statistics for a PR."""
+
+    total_threads: int
+    active_threads: int
+    fixed_threads: int
+    active_percentage: float
+
+
+@dataclass
+class AuthorSample:
+    """Summary of a single author's comment activity."""
+
+    count: int
+    latest_comment: str
+    latest_status: str
+
+
+@dataclass
+class CommentInfo:
+    """Single comment with thread and file context."""
+
+    thread_id: int
+    thread_status: str
+    author: str
+    content_preview: str
+    full_content: str
+    created_date: str | None
+    is_deleted: bool
+    file_path: str | None
+    line_start: int | None
+    line_end: int | None
+
+
+@dataclass
+class CommentAnalysis:
+    """Full comment analysis for a PR.
+
+    Returned by :func:`comments.analyze_pr_comments`.
+    """
+
+    pr_id: int
+    comment_summary: CommentSummary
+    comment_authors: dict[str, int]
+    author_samples: dict[str, AuthorSample]
+    active_comments: list[CommentInfo]
+    resolution_ready: bool

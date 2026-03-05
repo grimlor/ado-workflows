@@ -24,12 +24,14 @@ if TYPE_CHECKING:
     from azure.devops.connection import Connection
     from azure.devops.v7_1.core.core_client import CoreClient
     from azure.devops.v7_1.git.git_client import GitClient
+    from azure.devops.v7_1.policy.policy_client import PolicyClient
     from azure.devops.v7_1.work_item_tracking.work_item_tracking_client import (
         WorkItemTrackingClient,
     )
 
 _GIT_CLIENT_PATH = "azure.devops.v7_1.git.git_client.GitClient"
 _CORE_CLIENT_PATH = "azure.devops.v7_1.core.core_client.CoreClient"
+_POLICY_CLIENT_PATH = "azure.devops.v7_1.policy.policy_client.PolicyClient"
 _WIT_CLIENT_PATH = (
     "azure.devops.v7_1.work_item_tracking"
     ".work_item_tracking_client.WorkItemTrackingClient"
@@ -62,6 +64,11 @@ class AdoClient:
     def core(self) -> CoreClient:
         """Core operations: projects, teams."""
         return self._connection.get_client(_CORE_CLIENT_PATH)
+
+    @cached_property
+    def policy(self) -> PolicyClient:
+        """Policy operations: evaluations, configurations, types."""
+        return self._connection.get_client(_POLICY_CLIENT_PATH)
 
     @cached_property
     def work_items(self) -> WorkItemTrackingClient:

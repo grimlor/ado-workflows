@@ -7,7 +7,7 @@ Covers:
 
 Public API surface (from src/ado_workflows/votes.py):
     determine_vote_status(
-        reviewer: dict[str, Any],
+        reviewer: Any,
         stale_voter_ids: set[str] | None = None,
         vote_timestamps: dict[str, datetime] | None = None,
         latest_commit_date: datetime | None = None,
@@ -24,9 +24,36 @@ Public API surface (from src/ado_workflows/models.py):
 from __future__ import annotations
 
 from datetime import datetime
+from unittest.mock import Mock
 
 from ado_workflows.models import VOTE_TEXT, VoteStatus
 from ado_workflows.votes import deduplicate_team_containers, determine_vote_status
+
+
+def _reviewer(
+    *,
+    display_name: str | None = "Unknown",
+    unique_name: str | None = "",
+    reviewer_id: str = "default-id",
+    vote: int = 0,
+    is_container: bool | None = None,
+    voted_for: list[Mock] | None = None,
+) -> Mock:
+    """Build a mock IdentityRefWithVote matching the Azure DevOps SDK.
+
+    Attributes use snake_case (``display_name``, ``is_container``, etc.)
+    and ``voted_for`` items are Mock objects with an ``.id`` attribute,
+    matching ``IdentityRefWithVote`` nesting.
+    """
+    return Mock(
+        display_name=display_name,
+        unique_name=unique_name,
+        id=reviewer_id,
+        vote=vote,
+        is_container=is_container,
+        voted_for=voted_for,
+        spec=["display_name", "unique_name", "id", "vote", "is_container", "voted_for"],
+    )
 
 
 class TestVoteTextMapping:
@@ -76,13 +103,12 @@ class TestVoteTextMapping:
         Then vote_text is "Unknown vote: 99"
         """
         # Given: a reviewer dict with an unknown vote value
-        reviewer = {
-            "displayName": "Test User",
-            "uniqueName": "test@contoso.com",
-            "id": "user-1",
-            "vote": 99,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Test User",
+            unique_name="test@contoso.com",
+            reviewer_id="user-1",
+            vote=99,
+        )
 
         # When: determine_vote_status classifies the vote
         status = determine_vote_status(reviewer)
@@ -100,10 +126,11 @@ class TestDetermineVoteStatus:
     approvals.
 
     WHO: Phase 6c functions get_pr_review_status() and send_pr_review_reminders().
-    WHAT: Extracts fields from raw reviewer dict (displayName, uniqueName, id,
-          vote, isContainer, votedFor). Maps vote int → text via VOTE_TEXT. For
-          approval votes (10, 5): checks stale_voter_ids first (authoritative),
-          then falls back to timestamp comparison. Returns a VoteStatus dataclass.
+    WHAT: Extracts fields from IdentityRefWithVote SDK model (display_name,
+          unique_name, id, vote, is_container, voted_for). Maps vote int → text
+          via VOTE_TEXT. For approval votes (10, 5): checks stale_voter_ids first
+          (authoritative), then falls back to timestamp comparison. Returns a
+          VoteStatus dataclass.
     WHY: Centralizes vote classification so every consumer gets consistent
          staleness detection. PDP had send_pr_review_reminders skip this entirely.
 
@@ -120,13 +147,12 @@ class TestDetermineVoteStatus:
         Then VoteStatus has vote_text="Approved" and vote_invalidated=False
         """
         # Given: an approved reviewer with no staleness parameters
-        reviewer = {
-            "displayName": "Alice Smith",
-            "uniqueName": "alice@contoso.com",
-            "id": "alice-id",
-            "vote": 10,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Alice Smith",
+            unique_name="alice@contoso.com",
+            reviewer_id="alice-id",
+            vote=10,
+        )
 
         # When: the vote is classified
         status = determine_vote_status(reviewer)
@@ -152,13 +178,12 @@ class TestDetermineVoteStatus:
         Then vote_invalidated=True and invalidated_by_commit=True
         """
         # Given: an approved reviewer marked stale by ADO policy
-        reviewer = {
-            "displayName": "Alice Smith",
-            "uniqueName": "alice@contoso.com",
-            "id": "alice-id",
-            "vote": 10,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Alice Smith",
+            unique_name="alice@contoso.com",
+            reviewer_id="alice-id",
+            vote=10,
+        )
         stale_ids = {"alice-id"}
 
         # When: the vote is classified with staleness data
@@ -181,13 +206,12 @@ class TestDetermineVoteStatus:
         Then vote_invalidated=True via timestamp fallback
         """
         # Given: an approved reviewer whose vote predates the latest commit
-        reviewer = {
-            "displayName": "Bob Jones",
-            "uniqueName": "bob@contoso.com",
-            "id": "bob-id",
-            "vote": 10,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Bob Jones",
+            unique_name="bob@contoso.com",
+            reviewer_id="bob-id",
+            vote=10,
+        )
         vote_timestamps = {"bob-id": datetime(2026, 3, 1, 10, 0, 0)}
         latest_commit = datetime(2026, 3, 2, 14, 0, 0)
 
@@ -215,13 +239,12 @@ class TestDetermineVoteStatus:
         Then vote_invalidated=True (primary takes precedence)
         """
         # Given: a reviewer stale by both detection methods
-        reviewer = {
-            "displayName": "Alice Smith",
-            "uniqueName": "alice@contoso.com",
-            "id": "alice-id",
-            "vote": 10,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Alice Smith",
+            unique_name="alice@contoso.com",
+            reviewer_id="alice-id",
+            vote=10,
+        )
         stale_ids = {"alice-id"}
         vote_timestamps = {"alice-id": datetime(2026, 3, 1, 10, 0, 0)}
         latest_commit = datetime(2026, 3, 2, 14, 0, 0)
@@ -246,13 +269,12 @@ class TestDetermineVoteStatus:
         Then vote_invalidated=False (staleness only applies to approvals)
         """
         # Given: a pending reviewer whose ID is in the stale list
-        reviewer = {
-            "displayName": "Charlie Brown",
-            "uniqueName": "charlie@contoso.com",
-            "id": "charlie-id",
-            "vote": 0,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Charlie Brown",
+            unique_name="charlie@contoso.com",
+            reviewer_id="charlie-id",
+            vote=0,
+        )
         stale_ids = {"charlie-id"}
 
         # When: classified with staleness data
@@ -274,13 +296,12 @@ class TestDetermineVoteStatus:
         Then vote_text="Rejected" and vote_invalidated=False
         """
         # Given: a rejecting reviewer
-        reviewer = {
-            "displayName": "Diana Prince",
-            "uniqueName": "diana@contoso.com",
-            "id": "diana-id",
-            "vote": -10,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Diana Prince",
+            unique_name="diana@contoso.com",
+            reviewer_id="diana-id",
+            vote=-10,
+        )
 
         # When: classified
         status = determine_vote_status(reviewer)
@@ -301,13 +322,12 @@ class TestDetermineVoteStatus:
         Then vote_text="Waiting for author" and vote_invalidated=False
         """
         # Given: a waiting-for-author reviewer
-        reviewer = {
-            "displayName": "Eve Wilson",
-            "uniqueName": "eve@contoso.com",
-            "id": "eve-id",
-            "vote": -5,
-            "isContainer": False,
-        }
+        reviewer = _reviewer(
+            display_name="Eve Wilson",
+            unique_name="eve@contoso.com",
+            reviewer_id="eve-id",
+            vote=-5,
+        )
 
         # When: classified
         status = determine_vote_status(reviewer)
@@ -328,14 +348,14 @@ class TestDetermineVoteStatus:
         Then is_container=True and voted_for_ids=[]
         """
         # Given: a team container with no votedFor data
-        reviewer = {
-            "displayName": "Payments Team",
-            "uniqueName": "payments@contoso.com",
-            "id": "team-payments",
-            "vote": 0,
-            "isContainer": True,
-            "votedFor": None,
-        }
+        reviewer = _reviewer(
+            display_name="Payments Team",
+            unique_name="payments@contoso.com",
+            reviewer_id="team-payments",
+            vote=0,
+            is_container=True,
+            voted_for=None,
+        )
 
         # When: classified
         status = determine_vote_status(reviewer)
@@ -356,14 +376,13 @@ class TestDetermineVoteStatus:
         Then voted_for_ids=["team-1", "team-2"]
         """
         # Given: an individual who voted on behalf of two teams
-        reviewer = {
-            "displayName": "Frank Castle",
-            "uniqueName": "frank@contoso.com",
-            "id": "frank-id",
-            "vote": 10,
-            "isContainer": False,
-            "votedFor": [{"id": "team-1"}, {"id": "team-2"}],
-        }
+        reviewer = _reviewer(
+            display_name="Frank Castle",
+            unique_name="frank@contoso.com",
+            reviewer_id="frank-id",
+            vote=10,
+            voted_for=[Mock(id="team-1"), Mock(id="team-2")],
+        )
 
         # When: classified
         status = determine_vote_status(reviewer)
@@ -380,11 +399,13 @@ class TestDetermineVoteStatus:
         When determine_vote_status is called
         Then defaults to name="Unknown" and email=""
         """
-        # Given: a minimal reviewer dict with no identity fields
-        reviewer = {
-            "id": "anon-id",
-            "vote": 0,
-        }
+        # Given: a minimal reviewer with no identity fields
+        reviewer = _reviewer(
+            reviewer_id="anon-id",
+            vote=0,
+            display_name=None,
+            unique_name=None,
+        )
 
         # When: classified
         status = determine_vote_status(reviewer)

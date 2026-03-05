@@ -1,7 +1,8 @@
 """Vote classification and team-container deduplication.
 
-Pure functions — no I/O, no SDK calls.  Operates on raw ADO API reviewer
-dicts and produces typed :class:`~models.VoteStatus` instances.
+Pure functions — no I/O, no SDK calls.  Operates on SDK
+:class:`~azure.devops.v7_1.git.models.IdentityRefWithVote` model
+objects and produces typed :class:`~models.VoteStatus` instances.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from ado_workflows.models import VOTE_TEXT, VoteStatus
 
 
 def determine_vote_status(
-    reviewer: dict[str, Any],
+    reviewer: Any,
     stale_voter_ids: set[str] | None = None,
     vote_timestamps: dict[str, datetime] | None = None,
     latest_commit_date: datetime | None = None,
@@ -30,7 +31,7 @@ def determine_vote_status(
        (catches cases the primary source misses).
 
     Args:
-        reviewer: Raw reviewer dict from the ADO API.
+        reviewer: An ``IdentityRefWithVote`` SDK model object.
         stale_voter_ids: Reviewer GUIDs marked stale by branch policy.
         vote_timestamps: Mapping of reviewer GUID → vote datetime.
         latest_commit_date: Datetime of the most recent push.
@@ -38,16 +39,16 @@ def determine_vote_status(
     Returns:
         A fully populated :class:`VoteStatus`.
     """
-    vote: int = reviewer.get("vote", 0)
-    display_name: str = reviewer.get("displayName", "Unknown")
-    unique_name: str = reviewer.get("uniqueName", "")
-    reviewer_id: str = reviewer.get("id", "")
-    is_container: bool = reviewer.get("isContainer", False)
+    vote: int = reviewer.vote or 0
+    display_name: str = reviewer.display_name or "Unknown"
+    unique_name: str = reviewer.unique_name or ""
+    reviewer_id: str = reviewer.id or ""
+    is_container: bool = reviewer.is_container or False
 
-    # votedFor can be None from the API — default to empty list
-    voted_for = reviewer.get("votedFor") or []
+    # voted_for can be None from the API — default to empty list
+    voted_for: list[Any] = reviewer.voted_for or []
     voted_for_ids: list[str] = [
-        vf.get("id") for vf in voted_for if vf and vf.get("id")
+        vf.id for vf in voted_for if vf and vf.id
     ]
 
     vote_text = VOTE_TEXT.get(vote, f"Unknown vote: {vote}")

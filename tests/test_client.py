@@ -1,7 +1,7 @@
 """BDD tests for ado_workflows.client — AdoClient typed SDK accessors.
 
 Covers:
-    TestAdoClientAccess — typed property access to Git, Core, Work Item clients
+    TestAdoClientAccess — typed property access to Git, Core, Work Item, Policy clients
     TestAdoClientCaching — lazy initialization and caching behavior
 """
 
@@ -33,10 +33,11 @@ class TestAdoClientAccess:
     """
     REQUIREMENT: AdoClient provides typed access to Azure DevOps SDK clients.
 
-    WHO: Workflow layers that need Git, Core, or Work Item Tracking operations
+    WHO: Workflow layers that need Git, Core, Work Item Tracking, or Policy operations
     WHAT: The git property returns the Git client from the connection;
           the core property returns the Core client;
           the work_items property returns the Work Item Tracking client;
+          the policy property returns the Policy client;
           each property requests the correct SDK client class path
     WHY: Direct SDK client construction via connection.get_client(string)
          is untyped and error-prone — the wrapper provides a clean,
@@ -102,6 +103,24 @@ class TestAdoClientAccess:
             ".work_item_tracking_client.WorkItemTrackingClient"
         )
         assert wit is not None
+
+    def test_policy_property_returns_policy_client(self) -> None:
+        """
+        When the policy property is accessed
+        Then get_client is called with the PolicyClient class path
+        """
+        # Given: a mock connection
+        connection = _mock_connection()
+        client = AdoClient(connection)
+
+        # When: policy property accessed
+        policy = client.policy
+
+        # Then: correct client requested
+        connection.get_client.assert_any_call(
+            "azure.devops.v7_1.policy.policy_client.PolicyClient"
+        )
+        assert policy is not None
 
 
 # ---------------------------------------------------------------------------
@@ -181,22 +200,43 @@ class TestAdoClientCaching:
         assert first is second
         assert connection.get_client.call_count == 1
 
+    def test_policy_client_is_cached_after_first_access(self) -> None:
+        """
+        Given the policy property has been accessed once
+        When it is accessed again
+        Then the same object is returned
+        """
+        # Given: access policy once
+        connection = _mock_connection()
+        client = AdoClient(connection)
+        first = client.policy
+
+        # When: access again
+        second = client.policy
+
+        # Then: same object
+        assert first is second
+        assert connection.get_client.call_count == 1
+
     def test_different_clients_are_independent(self) -> None:
         """
-        When git, core, and work_items are all accessed
+        When git, core, work_items, and policy are all accessed
         Then each triggers a separate get_client call with its own path
         """
         # Given: a mock connection
         connection = _mock_connection()
         client = AdoClient(connection)
 
-        # When: all three clients accessed
+        # When: all four clients accessed
         _ = client.git
         _ = client.core
         _ = client.work_items
+        _ = client.policy
 
-        # Then: three separate get_client calls
-        assert connection.get_client.call_count == 3
+        # Then: four separate get_client calls
+        assert connection.get_client.call_count == 4, (
+            f"Expected 4 get_client calls, got {connection.get_client.call_count}"
+        )
         paths = [call.args[0] for call in connection.get_client.call_args_list]
         assert "azure.devops.v7_1.git.git_client.GitClient" in paths
         assert "azure.devops.v7_1.core.core_client.CoreClient" in paths
@@ -204,3 +244,4 @@ class TestAdoClientCaching:
             "azure.devops.v7_1.work_item_tracking"
             ".work_item_tracking_client.WorkItemTrackingClient"
         ) in paths
+        assert "azure.devops.v7_1.policy.policy_client.PolicyClient" in paths
