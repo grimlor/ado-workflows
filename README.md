@@ -3,6 +3,7 @@
 Azure DevOps workflow automation library — PR context, repository discovery, and SDK client wrappers.
 
 [![CI](https://github.com/grimlor/ado-workflows/actions/workflows/ci.yml/badge.svg)](https://github.com/grimlor/ado-workflows/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/grimlor/1fcd9ddb46319b8bf6ed2d6500ae5725/raw/ado-workflows-coverage.json)](https://github.com/grimlor/ado-workflows)
 [![PyPI](https://img.shields.io/pypi/v/ado-workflows)](https://pypi.org/project/ado-workflows/)
 
 ## Install

@@ -5,12 +5,11 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - actionable-errors>=0.1.0
-          - azure-devops>=7.1
-          - azure-identity>=1.19
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
         args: [--strict]
