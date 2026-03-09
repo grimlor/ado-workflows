@@ -9,7 +9,7 @@ description = "Azure DevOps workflow automation library — PR context, reposito
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [{ name = "grimlor" }]
+authors = [{ name = "Jack Pines" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
