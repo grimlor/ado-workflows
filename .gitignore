@@ -32,5 +32,6 @@ htmlcov/
 .ruff_cache/
 .pytest_cache/
 
-# Copilot work files
-.copilot/
+# Copilot work plans
+.copilot/*
+!.copilot/README.md
