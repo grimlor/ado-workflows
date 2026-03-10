@@ -7,7 +7,7 @@ name = "ado-workflows"
 version = "0.1.0"
 description = "Azure DevOps workflow automation library — PR context, repository discovery, and SDK client wrappers"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Jack Pines" }]
 classifiers = [
@@ -86,6 +86,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["ado_workflows"]
+combine-as-imports = true
 
 [tool.ruff.format]
 quote-style = "double"
