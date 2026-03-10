@@ -96,7 +96,7 @@ indent-style = "space"
 # ---------------------------------------------------------------------------
 [tool.pyright]
 pythonVersion = "3.12"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 reportPrivateUsage = false
 reportMissingTypeStubs = false
 

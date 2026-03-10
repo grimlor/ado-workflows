@@ -37,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release version --no-push --no-vcs-release --skip-build
 
-      - name: Push tag and create release
+      - name: Push release commit, tag, and create release
         id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,7 +45,7 @@ jobs:
           NEW_TAG=$(git tag --points-at HEAD | grep '^v' | head -1)
           if [ -n "$NEW_TAG" ]; then
             echo "New version: $NEW_TAG"
-            git push origin "$NEW_TAG"
+            git push origin HEAD:main "$NEW_TAG"
             gh release create "$NEW_TAG" \
               --title "$NEW_TAG" \
               --generate-notes \
