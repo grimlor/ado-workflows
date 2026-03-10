@@ -97,6 +97,10 @@ class ApprovalStatus:
     pending_reviewers: list[VoteStatus]
 
 
+def _empty_errors() -> list[ActionableError]:
+    return []
+
+
 @dataclass
 class ReviewStatus:
     """Full review status for a single PR.
@@ -114,7 +118,7 @@ class ReviewStatus:
     last_commit_date: datetime | None
     approval_status: ApprovalStatus
     summary: str
-    warnings: list[ActionableError] = field(default_factory=list)
+    warnings: list[ActionableError] = field(default_factory=_empty_errors)
 
 
 @dataclass

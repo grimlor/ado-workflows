@@ -18,7 +18,7 @@ Typical usage::
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from azure.devops.connection import Connection
@@ -53,7 +53,7 @@ class AdoClient:
     """
 
     def __init__(self, connection: Connection) -> None:
-        self._connection: Any = connection
+        self._connection: Connection = connection
 
     @cached_property
     def git(self) -> GitClient:

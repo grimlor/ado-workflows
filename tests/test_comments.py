@@ -64,7 +64,7 @@ def _make_thread(
     thread.status = status
 
     # Build mock comments
-    mock_comments = []
+    mock_comments: list[Mock] = []
     for c in comments or []:
         comment = Mock()
         author = Mock()
@@ -897,7 +897,7 @@ class TestResolveComments:
         # Given: a mock client where update_thread succeeds for all
         # and get_threads returns threads with non-matching statuses
         client = Mock()
-        threads = []
+        threads: list[Mock] = []
         for tid in (1, 2, 3):
             t = Mock()
             t.id = tid
@@ -931,7 +931,7 @@ class TestResolveComments:
         """
         # Given: a mock client where thread 2 raises on update
         client = Mock()
-        threads = []
+        threads: list[Mock] = []
         for tid in (1, 2, 3):
             t = Mock()
             t.id = tid
@@ -1057,7 +1057,7 @@ class TestResolveComments:
         """
         # Given: a mock client where every update_thread raises
         client = Mock()
-        threads = []
+        threads: list[Mock] = []
         for tid in (1, 2, 3):
             t = Mock()
             t.id = tid

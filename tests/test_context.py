@@ -490,7 +490,9 @@ class TestContextGet:
         # Given: working directory set but no cached info (defensive path)
         repo_dir = tmp_path / "my-repo"
         repo_dir.mkdir()
-        RepositoryContext._working_directory = str(repo_dir)
+        # Test the defensive cache-population path; no public API to set
+        # working_directory without populating the cache.
+        RepositoryContext._working_directory = str(repo_dir)  # pyright: ignore[reportPrivateUsage]
 
         with (
             patch(

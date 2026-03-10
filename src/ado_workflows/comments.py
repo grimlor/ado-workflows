@@ -9,7 +9,7 @@ analysis returning a typed :class:`~models.CommentAnalysis`),
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 
@@ -48,7 +48,7 @@ def sanitize_ado_response(raw_data: bytes | str) -> str:
     if isinstance(raw_data, str):
         return raw_data
 
-    raw_bytes: bytes = bytes(raw_data) if not isinstance(raw_data, bytes) else raw_data
+    raw_bytes: bytes = raw_data
 
     # Windows-1252 → UTF-8 smart quote replacements
     # 0x91 = left single quote  (') → U+2018
@@ -86,7 +86,7 @@ def analyze_pr_comments(
         A :class:`~models.CommentAnalysis` with thread statistics,
         author breakdowns, and active comments.
     """
-    threads: list[Any] = client.git.get_threads(repository, pr_id, project=project)
+    threads = client.git.get_threads(repository, pr_id, project=project)
 
     # Categorize threads by status
     active_threads = [t for t in threads if t.status == "active"]
@@ -317,10 +317,10 @@ def resolve_comments(
         return ResolveResult(resolved=resolved, errors=errors, skipped=skipped)
 
     # Fetch current thread statuses for skip detection
-    all_threads: list[Any] = client.git.get_threads(
+    all_threads = client.git.get_threads(
         repository, pr_id, project=project,
     )
-    current_status: dict[int, str] = {t.id: t.status for t in all_threads}
+    current_status: dict[int, str | None] = {t.id: t.status for t in all_threads}
 
     for tid in thread_ids:
         # Skip threads already in the target status

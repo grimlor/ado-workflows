@@ -16,11 +16,15 @@ from ado_workflows.client import AdoClient
 # ---------------------------------------------------------------------------
 
 
+def _fake_get_client(path: str) -> Mock:
+    """Side-effect for mock Connection.get_client()."""
+    return Mock(name=f"client:{path}")
+
+
 def _mock_connection() -> Mock:
     """Return a mock Connection with a get_client method."""
     connection = Mock()
-    # Each call to get_client returns a distinct mock
-    connection.get_client.side_effect = lambda path: Mock(name=f"client:{path}")
+    connection.get_client.side_effect = _fake_get_client
     return connection
 
 

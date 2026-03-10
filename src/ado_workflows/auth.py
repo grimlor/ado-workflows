@@ -13,7 +13,7 @@ Typical usage::
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from azure.devops.connection import Connection
 from azure.identity import DefaultAzureCredential
@@ -44,7 +44,7 @@ class ConnectionFactory:
     """
 
     def __init__(self, credential: TokenCredential | None = None) -> None:
-        self._credential: Any = credential or DefaultAzureCredential()
+        self._credential: TokenCredential = credential or DefaultAzureCredential()
         self._connections: dict[str, Connection] = {}
         self._token_expiry: dict[str, float] = {}
 

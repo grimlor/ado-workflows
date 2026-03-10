@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 from ado_workflows.auth import (
@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _fake_connection(**kw: Any) -> Mock:
+    """Factory for mock Connection objects keyed by base_url."""
+    return Mock(name=kw.get("base_url", "conn"))
+
 
 def _fake_token(*, expires_in: float = 3600.0) -> SimpleNamespace:
     """Return a token-like object with .token and .expires_on."""
@@ -214,7 +219,7 @@ class TestConnectionCaching:
         # Then: get_token called only once (not re-acquired)
         credential.get_token.assert_called_once()
 
-    @patch("ado_workflows.auth.Connection", side_effect=lambda **kw: Mock(name=kw.get("base_url", "conn")))
+    @patch("ado_workflows.auth.Connection", side_effect=_fake_connection)
     @patch("ado_workflows.auth.BasicTokenAuthentication")
     def test_different_orgs_have_separate_connections(
         self, mock_bta: Mock, mock_conn_cls: Mock
@@ -237,7 +242,7 @@ class TestConnectionCaching:
         # Then: get_token called twice (once per org)
         assert credential.get_token.call_count == 2
 
-    @patch("ado_workflows.auth.Connection", side_effect=lambda **kw: Mock(name="conn"))
+    @patch("ado_workflows.auth.Connection", side_effect=_fake_connection)
     @patch("ado_workflows.auth.BasicTokenAuthentication")
     def test_expired_token_triggers_refresh(
         self, mock_bta: Mock, mock_conn_cls: Mock, monkeypatch: pytest.MonkeyPatch
@@ -318,7 +323,7 @@ class TestConnectionCaching:
         # Then: get_token called only once
         credential.get_token.assert_called_once()
 
-    @patch("ado_workflows.auth.Connection", side_effect=lambda **kw: Mock(name="conn"))
+    @patch("ado_workflows.auth.Connection", side_effect=_fake_connection)
     @patch("ado_workflows.auth.BasicTokenAuthentication")
     def test_clear_cache_removes_all_connections(
         self, mock_bta: Mock, mock_conn_cls: Mock

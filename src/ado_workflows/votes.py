@@ -7,16 +7,18 @@ objects and produces typed :class:`~models.VoteStatus` instances.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+    from azure.devops.v7_1.git.models import IdentityRefWithVote
 
 from ado_workflows.models import VOTE_TEXT, VoteStatus
 
 
 def determine_vote_status(
-    reviewer: Any,
+    reviewer: IdentityRefWithVote,
     stale_voter_ids: set[str] | None = None,
     vote_timestamps: dict[str, datetime] | None = None,
     latest_commit_date: datetime | None = None,
@@ -46,7 +48,7 @@ def determine_vote_status(
     is_container: bool = reviewer.is_container or False
 
     # voted_for can be None from the API — default to empty list
-    voted_for: list[Any] = reviewer.voted_for or []
+    voted_for = reviewer.voted_for or []
     voted_for_ids: list[str] = [
         vf.id for vf in voted_for if vf and vf.id
     ]

@@ -16,7 +16,10 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from actionable_errors import ActionableError
-from azure.devops.v7_1.git.models import GitPullRequestSearchCriteria
+from azure.devops.v7_1.git.models import (
+    GitPullRequest,
+    GitPullRequestSearchCriteria,
+)
 
 from ado_workflows.models import (
     ApprovalStatus,
@@ -24,6 +27,7 @@ from ado_workflows.models import (
     PendingReviewResult,
     ReviewerInfo,
     ReviewStatus,
+    VoteStatus,
 )
 from ado_workflows.votes import deduplicate_team_containers, determine_vote_status
 
@@ -63,7 +67,7 @@ def fetch_required_approvals(
     artifact_id = f"vstfs:///CodeReview/CodeReviewId/{project}/{pr_id}"
 
     try:
-        evaluations: list[Any] = client.policy.get_policy_evaluations(
+        evaluations = client.policy.get_policy_evaluations(
             project, artifact_id,
         )
     except Exception as exc:
@@ -119,7 +123,7 @@ def fetch_vote_timestamps(
     Returns:
         Mapping of ``{reviewer_guid: vote_datetime}``.
     """
-    threads: list[Any] = client.git.get_threads(repository, pr_id, project=project)
+    threads = client.git.get_threads(repository, pr_id, project=project)
 
     vote_timestamps: dict[str, datetime] = {}
 
@@ -137,7 +141,7 @@ def fetch_vote_timestamps(
             continue
 
         # Resolve thread-local identity ref to actual GUID
-        identities: dict[str, Any] = thread.identities or {}
+        identities = thread.identities or {}
         identity = identities.get(identity_ref)
         if identity is None:
             continue
@@ -198,7 +202,7 @@ def get_review_status(
     """
     # Step 1 — Fetch PR details
     try:
-        pr: Any = client.git.get_pull_request_by_id(pr_id)
+        pr = client.git.get_pull_request_by_id(pr_id)
     except Exception as exc:
         raise ActionableError.not_found(
             service="AzureDevOps",
@@ -212,7 +216,7 @@ def get_review_status(
         ) from exc
 
     # Step 2 — Fetch commits (latest commit date for staleness detection)
-    commits: list[Any] = client.git.get_pull_request_commits(
+    commits = client.git.get_pull_request_commits(
         repository, pr_id, project=project,
     )
     last_commit_date: datetime | None = None
@@ -223,7 +227,7 @@ def get_review_status(
     warnings: list[ActionableError] = []
     stale_voter_ids: set[str] = set()
     try:
-        properties: dict[str, Any] = client.git.get_pull_request_properties(
+        properties = client.git.get_pull_request_properties(
             repository, pr_id, project=project,
         )
         prop_value: dict[str, Any] = properties.get("value") or {}
@@ -249,7 +253,7 @@ def get_review_status(
     vote_timestamps = fetch_vote_timestamps(client, repository, pr_id, project)
 
     # Step 5 — Classify each reviewer's vote
-    reviewers: list[Any] = pr.reviewers or []
+    reviewers = pr.reviewers or []
     vote_statuses = [
         determine_vote_status(
             reviewer,
@@ -312,9 +316,9 @@ def get_review_status(
     summary = _build_summary(approval_status, invalidated_approvers, waiting_reviewers)
 
     # Compute days_open
-    creation_date: datetime = pr.creation_date
+    creation_date = pr.creation_date
     now = datetime.now(tz=UTC)
-    days_open = (now - creation_date).days
+    days_open = (now - creation_date).days if creation_date else 0
 
     return ReviewStatus(
         pr_id=pr_id,
@@ -365,7 +369,7 @@ def analyze_pending_reviews(
     # Step 1 — Fetch active PRs
     criteria = GitPullRequestSearchCriteria(status="active")
     try:
-        all_prs: list[Any] = client.git.get_pull_requests(
+        all_prs = client.git.get_pull_requests(
             repository, criteria, project=project,
         )
     except Exception as exc:
@@ -424,7 +428,7 @@ def analyze_pending_reviews(
 
 def _enrich_pr(
     client: AdoClient,
-    pr: Any,
+    pr: GitPullRequest,
     project: str,
     repository: str,
     *,
@@ -438,7 +442,7 @@ def _enrich_pr(
     pr_id: int = pr.pull_request_id
 
     # Fetch commits (latest commit date for staleness detection)
-    commits: list[Any] = client.git.get_pull_request_commits(
+    commits = client.git.get_pull_request_commits(
         repository, pr_id, project=project,
     )
     last_commit_date: datetime | None = None
@@ -448,7 +452,7 @@ def _enrich_pr(
     # Extract stale voter IDs from PR properties
     stale_voter_ids: set[str] = set()
     try:
-        properties: dict[str, Any] = client.git.get_pull_request_properties(
+        properties = client.git.get_pull_request_properties(
             repository, pr_id, project=project,
         )
         prop_value: dict[str, Any] = properties.get("value") or {}
@@ -465,7 +469,7 @@ def _enrich_pr(
     vote_timestamps = fetch_vote_timestamps(client, repository, pr_id, project)
 
     # Classify each reviewer's vote
-    reviewers: list[Any] = pr.reviewers or []
+    reviewers = pr.reviewers or []
     vote_statuses = [
         determine_vote_status(
             reviewer,
@@ -516,7 +520,7 @@ def _enrich_pr(
     if is_approved and not pending_reviewers and needs == 0:
         return None
 
-    creation: datetime = pr.creation_date
+    creation = pr.creation_date or now
     days_open = (now - creation).days
     merge_status: str = pr.merge_status or "unknown"
 
@@ -551,8 +555,8 @@ def _enrich_pr(
 
 def _build_summary(
     approval: ApprovalStatus,
-    invalidated: list[Any],
-    waiting: list[Any],
+    invalidated: list[VoteStatus],
+    waiting: list[VoteStatus],
 ) -> str:
     """Build a human-readable summary string for the review status."""
     parts: list[str] = []
