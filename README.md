@@ -5,6 +5,7 @@ Azure DevOps workflow automation library — PR review analysis, comment lifecyc
 [![CI](https://github.com/grimlor/ado-workflows/actions/workflows/ci.yml/badge.svg)](https://github.com/grimlor/ado-workflows/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/grimlor/b7836cded70590f934b1877fd521c26b/raw/ado-workflows-coverage.json)](https://github.com/grimlor/ado-workflows)
 [![PyPI](https://img.shields.io/pypi/v/ado-workflows)](https://pypi.org/project/ado-workflows/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ## Install
 
