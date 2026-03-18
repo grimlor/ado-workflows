@@ -184,13 +184,16 @@ class TestAnalyzePendingReviewsOrchestration:
 
     WHO: MCP tools and automation scripts that need to identify which PRs are
          waiting for reviews.
-    WHAT: Fetches active PRs via GitClient.get_pull_requests() with
-          GitPullRequestSearchCriteria. Filters out drafts, respects
-          creator_filter (case-insensitive), max_days_old. Per-PR enrichment
-          reuses fetch_vote_timestamps, determine_vote_status,
-          deduplicate_team_containers, fetch_required_approvals. Computes
-          needs_approvals_count and valid_approvals_count. Only includes PRs
-          that still need attention. Returns sorted by days_open descending.
+    WHAT: (1) active PRs with pending reviewers produce PendingPR entries
+          (2) draft PRs are excluded
+          (3) PRs older than max_days_old are excluded
+          (4) creator_filter limits results to matching authors
+          (5) fully approved PRs (not stale) are excluded
+          (6) a stale approval includes the PR with needs_approvals_count
+              reflecting the invalidation
+          (7) team containers are deduplicated and approval counts are correct
+          (8) policy-based required count is used instead of hardcoded default
+          (9) results are sorted by days_open descending
     WHY: The PDP version had three critical bugs: hardcoded required_approvals,
          no vote staleness detection, no team container deduplication.
 
@@ -547,9 +550,11 @@ class TestAnalyzePendingReviewsErrorHandling:
     WHO: Callers who need clear diagnostics when the API is unreachable or
          permissions are insufficient, and who want to report which PRs could
          not be analyzed.
-    WHAT: If get_pull_requests() raises, wraps in ActionableError.connection().
-          If per-PR enrichment fails, creates ActionableError.internal() naming
-          the PR ID. Empty active PR list returns empty result, not an error.
+    WHAT: (1) a PR listing API failure raises ActionableError
+          (2) per-PR enrichment failure produces a skipped ActionableError
+              naming the PR ID while remaining PRs succeed
+          (3) no active PRs returns an empty result, not an error
+          (4) multiple PR enrichment failures each appear in result.skipped
     WHY: The N+1 enrichment pattern means one bad PR should not prevent
          analysis of the rest. The top-level listing failure is non-recoverable.
 
@@ -676,10 +681,13 @@ class TestAnalyzePendingReviewsEdgeCases:
     gracefully.
 
     WHO: Library consumers processing PRs with unusual states.
-    WHAT: PRs with no reviewers produce pending_reviewers=[] and
-          needs_approvals_count equal to required count. PRs with None
-          creation date are excluded. merge_status "conflicts" sets
-          has_conflicts=True. creator_filter matching is case-insensitive.
+    WHAT: (1) a PR with no reviewers produces empty pending_reviewers and
+              needs_approvals_count equal to the required count
+          (2) a PR with None creation date is excluded
+          (3) merge_status "conflicts" sets has_conflicts=True
+          (4) creator_filter matching is case-insensitive
+          (5) a properties API failure is gracefully ignored
+          (6) a policy fetch failure uses the default required count
     WHY: Real Azure DevOps data frequently has missing or unexpected values.
          Defensive handling prevents crashes during batch analysis.
 

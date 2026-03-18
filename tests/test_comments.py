@@ -111,9 +111,13 @@ class TestSanitizeAdoResponse:
     corruption in raw bytes from ADO responses.
 
     WHO: analyze_pr_comments() and any consumer processing raw ADO content.
-    WHAT: Replaces Windows-1252 bytes 0x91-0x94 (smart single and double
-          quotes) with their UTF-8 equivalents before decoding. String inputs
-          pass through unchanged. Returns a decoded UTF-8 string.
+    WHAT: (1) string inputs pass through unchanged
+          (2) Windows-1252 left double quote (0x93) is replaced with UTF-8 U+201C
+          (3) Windows-1252 right double quote (0x94) is replaced with UTF-8 U+201D
+          (4) Windows-1252 left single quote (0x91) is replaced with UTF-8 U+2018
+          (5) Windows-1252 right single quote (0x92) is replaced with UTF-8 U+2019
+          (6) clean UTF-8 bytes are decoded normally with no replacements
+          (7) mixed smart quotes and normal text are all handled correctly
     WHY: ADO REST API sometimes returns Windows-1252 encoded smart quotes in
          PR comments. These bytes are invalid UTF-8 and cause
          UnicodeDecodeError without sanitization. Battle-tested in production.
@@ -252,10 +256,19 @@ class TestAnalyzePRComments:
     threads on a PR.
 
     WHO: MCP tools, code review dashboards, any consumer needing comment status.
-    WHAT: Calls client.git.get_threads(), categorizes threads by status
-          (active, fixed, etc.), extracts author statistics, builds content
-          previews (truncated at 200 chars), identifies file paths and line
-          ranges from thread context, returns CommentAnalysis.
+    WHAT: (1) mixed thread statuses produce correct counts in CommentSummary
+          (2) no threads produce an empty analysis with resolution_ready=True
+          (3) threads with file context populate file_path, line_start, line_end
+          (4) threads without file context have None for file fields
+          (5) long comment content is truncated at 200 chars with "..." appended
+          (6) short comment content is not truncated
+          (7) multiple authors are counted correctly in comment_authors
+          (8) author_samples contain the latest comment and status
+          (9) deleted comments are excluded from author_samples
+          (10) all threads resolved means resolution_ready=True
+          (11) at least one active thread means resolution_ready=False
+          (12) line_start falls back to leftFileStart when rightFileStart is absent
+          (13) the SDK call receives the correct parameters
     WHY: Comment analysis drives PR review workflows — knowing which threads
          are unresolved, who commented, and whether a PR is resolution-ready.
 
@@ -643,9 +656,11 @@ class TestPostComment:
     REQUIREMENT: post_comment() creates a new comment thread on a PR.
 
     WHO: MCP tools posting AI analysis, review feedback, or status updates.
-    WHAT: Constructs Comment + GitPullRequestCommentThread, calls
-          client.git.create_thread(), returns the new thread ID, raises
-          ActionableError on failure.
+    WHAT: (1) valid content creates a thread and returns the new thread ID
+          (2) a custom status is passed through to the SDK model
+          (3) an SDK exception raises ActionableError
+          (4) empty content raises ActionableError
+          (5) whitespace-only content raises ActionableError
     WHY: Replaces az rest POST .../threads plus GUID-resolution subprocess.
 
     MOCK BOUNDARY:
@@ -753,9 +768,9 @@ class TestReplyToComment:
     REQUIREMENT: reply_to_comment() adds a reply to an existing comment thread.
 
     WHO: MCP tools replying to review feedback or continuing conversations.
-    WHAT: Constructs Comment with parent_comment_id=1, calls
-          client.git.create_comment(), returns the new comment ID, raises
-          ActionableError on failure.
+    WHAT: (1) valid thread_id and content returns the new comment ID
+          (2) an SDK exception raises ActionableError
+          (3) empty content raises ActionableError
     WHY: Replaces az rest POST .../threads/{id}/comments plus
          GUID-resolution subprocess.
 
@@ -826,12 +841,13 @@ class TestResolveComments:
     partial-success reporting.
 
     WHO: MCP tools resolving addressed review comments in bulk.
-    WHAT: Iterates thread_ids, calls client.git.update_thread() with target
-          status, collects successes and failures, returns ResolveResult —
-          never raises on individual thread failure. Per-thread failures are
-          captured as ActionableError.internal() instances with
-          context={"thread_id": tid} in ResolveResult.errors, so the consumer
-          knows both which threads failed and why.
+    WHAT: (1) all resolvable threads appear in resolved with empty errors
+          (2) partial failure puts successes in resolved and failures in errors
+              with ActionableError containing context={"thread_id": tid}
+          (3) a thread already in the target status appears in skipped
+          (4) an empty thread list returns all-empty result lists
+          (5) a custom status is passed through to the SDK model
+          (6) all threads failing puts every error in errors with resolved=[]
     WHY: Preserves batch semantics and partial-success pattern. Replaces
          az rest PATCH .../threads/{id} per-thread subprocess calls. Surfacing
          structured errors (not just IDs) ensures callers can report meaningful

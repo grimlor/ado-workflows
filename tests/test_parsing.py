@@ -22,10 +22,17 @@ class TestAdoUrlParsing:
     REQUIREMENT: Azure DevOps URLs are parsed into their constituent parts.
 
     WHO: Any consumer that needs org, project, repo, or PR ID from a URL.
-    WHAT: Modern dev.azure.com URLs, legacy visualstudio.com URLs (with and
-          without DefaultCollection), SSH remote URLs, and PR URLs are all
-          parsed correctly; unsupported formats return empty strings for all
-          fields; URL-encoded spaces are decoded.
+    WHAT: (1) a modern dev.azure.com repo URL is parsed correctly
+          (2) a dev.azure.com PR URL extracts the PR ID
+          (3) URL-encoded project names are decoded
+          (4) a legacy visualstudio.com URL with DefaultCollection is parsed
+          (5) a modern visualstudio.com URL without DefaultCollection is parsed
+          (6) a visualstudio.com PR URL extracts the PR ID
+          (7) an SSH remote URL is parsed correctly
+          (8) an SSH remote with .git suffix has the suffix stripped
+          (9) an HTTPS repo URL with .git suffix has the suffix stripped
+          (10) an unsupported URL returns empty strings for all fields
+          (11) an empty string returns empty strings for all fields
     WHY: URL parsing is the foundation of every ADO operation — incorrect
          parsing cascades into wrong API calls, wrong repo targeting, and
          opaque failures.
@@ -231,9 +238,13 @@ class TestAdoDateParsing:
 
     WHO: Any consumer processing timestamps from ADO API responses (PR dates,
          comment timestamps, vote dates).
-    WHAT: ISO-format dates with timezone, with milliseconds, and without
-          timezone are all parsed and converted to local time with tzinfo
-          stripped; empty or malformed strings return None.
+    WHAT: (1) an ISO date with timezone suffix is parsed and tzinfo is stripped
+          (2) an ISO date with milliseconds is parsed correctly
+          (3) an ISO date without timezone is parsed (treated as UTC)
+          (4) an empty string returns None
+          (5) a malformed date string returns None
+          (6) a parsed UTC date matches the expected components after
+              round-trip conversion
     WHY: ADO API returns dates in inconsistent formats — callers must not
          perform ad-hoc parsing. A single, tested parser eliminates silent
          date comparison bugs.

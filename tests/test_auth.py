@@ -54,10 +54,13 @@ class TestConnectionCreation:
 
     WHO: Any workflow layer that needs authenticated access to the
          Azure DevOps API
-    WHAT: A factory initialized with a credential acquires a scoped token
-          and creates a Connection with the correct base URL and auth;
-          a factory with no explicit credential defaults to
-          DefaultAzureCredential
+    WHAT: (1) a factory initialized with a credential acquires a scoped token
+              and creates a Connection with the correct base URL and auth
+          (2) the provided credential is used for token acquisition
+          (3) a factory with no explicit credential defaults to
+              DefaultAzureCredential
+          (4) the Connection base_url matches the normalized org URL
+          (5) the AZURE_DEVOPS_RESOURCE_ID constant matches the well-known GUID
     WHY: The SDK requires a msrest-compatible credential, but modern auth
          uses azure-identity — the factory bridges this gap
 
@@ -178,11 +181,13 @@ class TestConnectionCaching:
     and refreshes tokens on expiry.
 
     WHO: Callers making repeated requests to the same organization
-    WHAT: Repeated calls with the same org URL return the cached connection;
-          expired or near-expired tokens trigger fresh token acquisition;
-          different org URLs maintain separate cached connections;
-          clear_cache removes all cached connections;
-          trailing-slash variations of the same org URL share a cache entry
+    WHAT: (1) repeated calls with the same org URL return the cached connection
+          (2) different org URLs maintain separate cached connections
+          (3) an expired token triggers fresh token acquisition
+          (4) a near-expiry token triggers proactive refresh
+          (5) a valid token skips refresh
+          (6) clear_cache removes all cached connections
+          (7) trailing-slash variations of the same org URL share a cache entry
     WHY: Token acquisition involves network I/O — caching avoids unnecessary
          round-trips while token refresh prevents auth failures
 

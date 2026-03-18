@@ -61,10 +61,9 @@ class TestVoteTextMapping:
     REQUIREMENT: Vote integers map to human-readable text via VOTE_TEXT constant.
 
     WHO: Any consumer that needs to display vote status to humans or LLMs.
-    WHAT: VOTE_TEXT maps each known ADO vote integer to a descriptive string:
-          10→"Approved", 5→"Approved with suggestions", 0→"No vote",
-          -5→"Waiting for author", -10→"Rejected". Unknown vote values produce
-          "Unknown vote: {value}" in determine_vote_status.
+    WHAT: (1) all known vote integers map to their expected human-readable text
+          (2) unknown vote values produce "Unknown vote: {value}" in
+              determine_vote_status
     WHY: Vote integers are an ADO API implementation detail. Every consumer needs
          human-readable text, and centralizing the mapping prevents inconsistency.
 
@@ -126,11 +125,19 @@ class TestDetermineVoteStatus:
     approvals.
 
     WHO: Phase 6c functions get_pr_review_status() and send_pr_review_reminders().
-    WHAT: Extracts fields from IdentityRefWithVote SDK model (display_name,
-          unique_name, id, vote, is_container, voted_for). Maps vote int → text
-          via VOTE_TEXT. For approval votes (10, 5): checks stale_voter_ids first
-          (authoritative), then falls back to timestamp comparison. Returns a
-          VoteStatus dataclass.
+    WHAT: (1) an approved vote without staleness data has vote_invalidated=False
+          (2) an approved vote in stale_voter_ids has vote_invalidated=True
+          (3) an approved vote whose timestamp predates the latest commit
+              has vote_invalidated=True via timestamp fallback
+          (4) staleness from both policy and timestamp still produces
+              vote_invalidated=True
+          (5) a no-vote (vote=0) is not affected by staleness data
+          (6) a rejected vote is classified correctly without invalidation
+          (7) a waiting-for-author vote is classified correctly without
+              invalidation
+          (8) a container with null voted_for has voted_for_ids=[]
+          (9) an individual with voted_for IDs has those IDs extracted
+          (10) missing display_name defaults to "Unknown"
     WHY: Centralizes vote classification so every consumer gets consistent
          staleness detection. PDP had send_pr_review_reminders skip this entirely.
 
@@ -433,9 +440,13 @@ class TestDeduplicateTeamContainers:
     already represented by an individual voter.
 
     WHO: Phase 6c get_pr_review_status() and send_pr_review_reminders().
-    WHAT: Scans non-container voters for their voted_for_ids, builds a set of
-          satisfied team IDs, removes any container whose reviewer_id is in that
-          set. Returns a new list — does not mutate the input.
+    WHAT: (1) a container satisfied by an individual voter is removed
+          (2) a container for a different team remains
+          (3) a container without a matching individual remains
+          (4) multiple individuals each satisfying different containers
+              removes all matched containers
+          (5) an empty list returns an empty list
+          (6) all individuals and no containers returns the same list
     WHY: When an individual votes on a PR, ADO also marks their team container
          as having voted. Without dedup, the same approval shows up twice —
          inflating approval counts and confusing status reports. PDP had this fix

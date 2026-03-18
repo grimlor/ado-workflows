@@ -182,14 +182,13 @@ class TestFetchRequiredApprovals:
     configured via branch policies for a PR.
 
     WHO: get_review_status() for approval calculations.
-    WHAT: Calls client.policy.get_policy_evaluations(project, artifact_id) where
-          artifact_id = "vstfs:///CodeReview/CodeReviewId/{project}/{pr_id}".
-          Searches evaluation results for a policy whose
-          configuration.type.display_name contains "Minimum number of reviewers".
-          Extracts configuration.settings["minimumApproverCount"].
-          Returns default_required_approvals if no matching policy is found.
-          Raises ActionableError if the API call fails, so the caller can
-          decide whether to use the default and surface the failure.
+    WHAT: (1) a matching "Minimum number of reviewers" policy returns
+              its configured minimumApproverCount
+          (2) no matching reviewer policy returns default_required_approvals
+          (3) empty policy evaluations return default_required_approvals
+          (4) an API exception raises ActionableError
+          (5) a custom default_required_approvals is returned when no policy
+          (6) multiple evaluations extracts the matching one
     WHY: Different repositories have different branch policies. A configurable
          default handles repos without policies, while the SDK call handles
          repos with them.
@@ -316,13 +315,16 @@ class TestFetchVoteTimestamps:
     from PR thread properties.
 
     WHO: get_review_status() for tier-2 staleness detection.
-    WHAT: Calls client.git.get_threads(repository, pr_id, project=project).
-          For each thread, checks thread.properties for a
-          CodeReviewVotedByIdentity key. The ``$value`` is a thread-local
-          identity reference number resolved via ``thread.identities`` to
-          obtain the actual reviewer GUID. Uses thread.published_date as
-          the vote timestamp.
-          Returns {reviewer_guid: vote_datetime} mapping.
+    WHAT: (1) threads with CodeReviewVotedByIdentity properties return a
+              {reviewer_id: timestamp} mapping
+          (2) threads without vote properties return an empty dict
+          (3) an empty thread list returns an empty dict
+          (4) malformed properties are skipped
+          (5) multiple votes for the same reviewer keep the latest timestamp
+          (6) an empty $value in the vote property is skipped
+          (7) a None published_date is skipped
+          (8) an identity ref not found in thread.identities is skipped
+          (9) a resolved identity with an empty id is skipped
     WHY: ADO has no public API for "when did reviewer X vote". The thread-based
          approach is the only reliable method. Documented as fragile.
 
@@ -533,14 +535,26 @@ class TestGetReviewStatus:
     including approval calculations, staleness detection, and human-readable summary.
 
     WHO: MCP tools, CI integrations, any consumer needing PR review state.
-    WHAT: Orchestrates: fetch PR details, fetch commits, fetch PR properties for
-          stale voter IDs, fetch vote timestamps from threads, classify each
-          reviewer's vote via determine_vote_status, deduplicate team containers,
-          fetch required approvals, compute approval status and build summary.
-          Returns a ReviewStatus dataclass.
-          Raises ActionableError for unrecoverable errors (PR not found, auth).
-          Catches recoverable enrichment failures (policy lookup, PR properties)
-          and surfaces them as ActionableError instances in ReviewStatus.warnings.
+    WHAT: (1) two approved reviewers meeting required count produces
+              is_approved=True and "Ready to merge" summary
+          (2) one approved reviewer with required=2 produces
+              needs_approvals_count=1
+          (3) a rejecting reviewer sets has_rejection=True and "BLOCKED"
+              summary
+          (4) a stale approval from PR properties populates
+              invalidated_approvers
+          (5) a stale approval from vote timestamp triggers tier-2 detection
+          (6) a waiting-for-author reviewer populates waiting_reviewers
+          (7) no reviewers needs all approvals
+          (8) team containers are deduplicated in approval counts
+          (9) a PR-not-found SDK exception raises ActionableError
+          (10) no commits sets last_commit_date=None
+          (11) all metadata fields (pr_id, title, author, url, days_open)
+               are populated correctly
+          (12) a properties fetch failure skips staleness and produces a
+               warning
+          (13) a policy API failure produces a warning and uses the default
+               count
     WHY: This is the primary read operation for PR review workflows. PDP's
          version used 20 subprocess calls; this uses 4-5 SDK calls. Surfacing
          warnings rather than logging them ensures consumers can report degradation.

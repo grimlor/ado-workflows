@@ -34,10 +34,11 @@ class TestURLParsing:
     by delegating to parse_ado_url.
 
     WHO: Any tool that receives a PR URL from the user.
-    WHAT: Given a valid PR URL, extracts org/project/repo/pr_id and returns a
-          populated context with source="url". Given a URL with missing fields
-          (no PR ID, incomplete path), raises ActionableError naming the
-          specific missing fields.
+    WHAT: (1) a dev.azure.com PR URL produces correct context with source="url"
+          (2) a visualstudio.com PR URL produces correct context
+          (3) a URL missing the PR ID raises ActionableError naming "pr_id"
+          (4) a URL missing multiple fields names all missing fields in the error
+          (5) a completely unparseable URL names all four fields as missing
     WHY: PR URLs are the most common way users reference PRs. If parsing fails
          silently, downstream operations target the wrong PR.
 
@@ -166,10 +167,13 @@ class TestRepositoryContextResolution:
     numeric PR ID using RepositoryContext.
 
     WHO: Any tool that receives a bare PR ID (e.g., 123) instead of a full URL.
-    WHAT: Calls RepositoryContext.get() to discover org/project/repo, constructs
-          a URL, and returns a context with source="repository_context". If
-          RepositoryContext.get() fails, raises ActionableError with suggestion
-          to call set_repository_context().
+    WHAT: (1) cached RepositoryContext produces correct PR context with
+              source="repository_context"
+          (2) no cached context raises ActionableError suggesting
+              set_repository_context()
+          (3) an explicit working_directory is forwarded to RepositoryContext
+          (4) an error dict from context raises ActionableError with the
+              underlying message
     WHY: Users often reference PRs by ID alone. Without context resolution, the
          tool can't know which org/project/repo the ID belongs to.
 
@@ -312,9 +316,11 @@ class TestPRContextFactory:
 
     WHO: MCP tools and library consumers who receive ambiguous input ("123" vs
          "https://...")
-    WHAT: If input looks like a URL (contains "://" or "dev.azure.com" or
-          "visualstudio.com"), delegates to from_url(). If input is numeric,
-          delegates to from_pr_id(). Otherwise raises ActionableError.
+    WHAT: (1) a URL input delegates to from_url() with source="url"
+          (2) a numeric string delegates to from_pr_id() with
+              source="repository_context"
+          (3) a non-numeric, non-URL string raises ActionableError
+          (4) an empty string raises ActionableError
     WHY: The consumer shouldn't need to pre-classify input. A single entry point
          handles both forms.
 
@@ -422,7 +428,7 @@ class TestOrgUrlProperty:
     REQUIREMENT: AzureDevOpsPRContext.org_url returns the organization base URL.
 
     WHO: Downstream SDK operations that need the org URL for ConnectionFactory.
-    WHAT: Returns https://dev.azure.com/{organization}.
+    WHAT: (1) returns https://dev.azure.com/{organization}
     WHY: Every SDK call needs the org URL. Computing it from the stored
          organization avoids passing it separately.
 
@@ -463,8 +469,8 @@ class TestSerialization:
     including computed properties.
 
     WHO: MCP tools returning context as JSON to LLMs.
-    WHAT: Returns a dict with all dataclass fields plus org_url. Result must
-          be JSON-serializable.
+    WHAT: (1) to_dict() contains all dataclass fields plus org_url
+          (2) the result is JSON-serializable
     WHY: LLMs need structured data. Omitting org_url would force every
          consumer to recompute it.
 

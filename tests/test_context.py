@@ -71,12 +71,13 @@ class TestContextSet:
     REQUIREMENT: RepositoryContext.set validates and caches repository info.
 
     WHO: MCP tools that need a stable repository context for the session
-    WHAT: set() with a valid absolute directory discovers and caches the repo;
-          set() with a relative path returns a validation error;
-          set() with a non-existent path returns a not-found error;
-          set() clears previous cache before discovering anew;
-          when infer_target_repository returns None the first discovered
-          repo is used as fallback
+    WHAT: (1) set() with a valid absolute directory discovers and caches the repo
+          (2) set() with a relative path returns a validation error
+          (3) set() with a non-existent path returns a not-found error
+          (4) set() clears previous cache before discovering anew
+          (5) set() resets state when discovery fails
+          (6) when infer_target_repository returns None the first discovered
+              repo is used as fallback
     WHY: Without validated context, downstream tools operate on stale or
          incorrect repository information
 
@@ -272,13 +273,15 @@ class TestContextGet:
     REQUIREMENT: RepositoryContext.get returns cached or fresh repository info.
 
     WHO: MCP tool functions requesting the current repository context
-    WHAT: get() without arguments returns cached info when available;
-          get() with an explicit directory performs fresh discovery
-          without updating the primary cache;
-          get() without arguments and no cache returns an intelligent
-          discovery result using the current working directory;
-          get() populates the cache on a primary-context miss;
-          context source metadata is attached to results
+    WHAT: (1) get() without arguments returns cached info when available
+          (2) get() with an explicit directory performs fresh discovery
+              without updating the primary cache
+          (3) get() without arguments and no cache returns an intelligent
+              discovery result using the current working directory
+          (4) get() without context returns an error when discovery fails
+          (5) get() with an override does not update the primary cache
+          (6) get() populates the cache on a primary-context miss
+          (7) get() uses os.getcwd() as the search root for intelligent discovery
     WHY: Caching avoids redundant git subprocess calls; explicit overrides
          enable multi-repo workflows
 
@@ -526,9 +529,9 @@ class TestContextClear:
     REQUIREMENT: RepositoryContext.clear removes all cached state.
 
     WHO: Callers switching between repositories or resetting session state
-    WHAT: clear() removes the working directory, cached info, and timestamp;
-          clear() returns the previous state for confirmation;
-          clearing empty state succeeds gracefully
+    WHAT: (1) clear() removes the working directory, cached info, and timestamp
+          (2) clear() returns the previous state for confirmation
+          (3) clearing empty state succeeds gracefully
     WHY: Stale context leads to operations against the wrong repository
 
     MOCK BOUNDARY:
@@ -622,8 +625,9 @@ class TestContextStatus:
     REQUIREMENT: RepositoryContext.status provides debugging info.
 
     WHO: Developers and AI agents diagnosing context issues
-    WHAT: status() reports whether context is set, the current directory,
-          cache availability, timestamp, and cached repo/org names
+    WHAT: (1) status() with no context reports no context and no cache
+          (2) status() with active context reports the current directory
+              and cached repo info
     WHY: Opaque state makes debugging multi-repo issues impossible
 
     MOCK BOUNDARY:
@@ -702,7 +706,7 @@ class TestContextThreadSafety:
     REQUIREMENT: RepositoryContext is safe for concurrent access.
 
     WHO: MCP servers handling concurrent tool calls
-    WHAT: Concurrent set/get/clear operations do not corrupt state
+    WHAT: (1) concurrent set/get/clear operations do not corrupt state
     WHY: MCP servers may receive multiple tool calls simultaneously
 
     MOCK BOUNDARY:
@@ -790,9 +794,9 @@ class TestContextErrorPaths:
     REQUIREMENT: RepositoryContext returns ActionableError dicts on failure.
 
     WHO: Callers that need structured error information
-    WHAT: Discovery exceptions are wrapped in ActionableError dicts;
-          empty repository lists produce structured not-found errors;
-          error dicts always contain success=False and an error_type
+    WHAT: (1) discovery exceptions are wrapped in ActionableError dicts
+          (2) OSError from discovery is wrapped with the original message
+          (3) empty repository lists produce structured not-found errors
     WHY: Unstructured exceptions break MCP tool response contracts
 
     MOCK BOUNDARY:
@@ -886,9 +890,10 @@ class TestConvenienceFunctions:
     REQUIREMENT: Module-level convenience functions delegate to RepositoryContext.
 
     WHO: Callers preferring a functional API over classmethods
-    WHAT: set_repository_context, get_repository_context, get_context_status,
-          clear_repository_context each delegate to the corresponding
-          classmethod
+    WHAT: (1) set_repository_context delegates to RepositoryContext.set
+          (2) get_repository_context delegates to RepositoryContext.get
+          (3) get_context_status delegates to RepositoryContext.status
+          (4) clear_repository_context delegates to RepositoryContext.clear
     WHY: Code often uses import-and-call style; convenience functions match
          the existing public API
 

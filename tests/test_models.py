@@ -53,8 +53,9 @@ class TestReviewerInfoConstruction:
     REQUIREMENT: ReviewerInfo dataclass holds reviewer identity and vote metadata.
 
     WHO: PendingPR.pending_reviewers field; Phase 6c reminder logic.
-    WHAT: Five fields: display_name, unique_name, vote, is_required, is_container.
-          Typed container replaces ad-hoc dicts for reviewer data in reminder workflows.
+    WHAT: (1) five fields (display_name, unique_name, vote, is_required,
+              is_container) are accessible with correct values
+          (2) a container reviewer has is_container=True
     WHY: Without a typed container, reviewer data would be passed as untyped dicts,
          making field access error-prone and undiscoverable.
 
@@ -116,8 +117,9 @@ class TestPendingPRConstruction:
     REQUIREMENT: PendingPR dataclass holds PR metadata for review reminders.
 
     WHO: Phase 6c send_pr_review_reminders().
-    WHAT: 14 fields including nested list[ReviewerInfo] for pending_reviewers.
-          needs_approvals_count and valid_approvals_count default to 0.
+    WHAT: (1) all required fields plus a nested list[ReviewerInfo] for
+              pending_reviewers are accessible with correct values
+          (2) needs_approvals_count and valid_approvals_count default to 0
     WHY: Without a typed container, PR data would be passed as untyped dicts,
          making field access error-prone and the approval count defaults implicit.
 
@@ -251,8 +253,10 @@ class TestApprovalStatusConstruction:
     REQUIREMENT: ApprovalStatus holds computed approval state for a PR.
 
     WHO: ReviewStatus.approval_status field; any consumer computing approval state.
-    WHAT: Eight fields: is_approved, needs_approvals_count, has_rejection, and five
-          typed lists of VoteStatus (valid, invalidated, rejecting, waiting, pending).
+    WHAT: (1) all fields are accessible with VoteStatus lists for each
+              reviewer category
+          (2) a fully approved status with empty rejection/waiting/pending lists
+              reflects is_approved=True
     WHY: Replaces untyped Dict[str, Any] from PDP. Enables IDE autocompletion and
          pyright validation of approval state access patterns.
 
@@ -353,8 +357,9 @@ class TestReviewStatusConstruction:
     REQUIREMENT: ReviewStatus holds the full review status for a single PR.
 
     WHO: Consumers of get_review_status() — MCP tools, CI integrations.
-    WHAT: Eight fields: pr_id, title, author, url, days_open, last_commit_date,
-          approval_status (nested ApprovalStatus), and summary string.
+    WHAT: (1) all fields including nested ApprovalStatus are accessible with
+              correct values
+          (2) last_commit_date=None is accepted for empty commit history
     WHY: Replaces untyped Dict[str, Any] returns from PDP. Provides typed,
          discoverable access to all review state.
 
@@ -458,7 +463,8 @@ class TestCommentSummaryConstruction:
     REQUIREMENT: CommentSummary holds thread count statistics for a PR.
 
     WHO: CommentAnalysis.comment_summary field; any consumer needing thread stats.
-    WHAT: Four fields: total_threads, active_threads, fixed_threads, active_percentage.
+    WHAT: (1) four fields (total_threads, active_threads, fixed_threads,
+              active_percentage) are accessible with correct values
     WHY: Typed container replaces nested dict keys for comment thread statistics.
 
     MOCK BOUNDARY:
@@ -499,7 +505,8 @@ class TestAuthorSampleConstruction:
     REQUIREMENT: AuthorSample summarizes a single author's comment activity.
 
     WHO: CommentAnalysis.author_samples field.
-    WHAT: Three fields: count, latest_comment, latest_status.
+    WHAT: (1) three fields (count, latest_comment, latest_status) are
+              accessible with correct values
     WHY: Typed container replaces nested dict for per-author comment summaries.
 
     MOCK BOUNDARY:
@@ -536,9 +543,9 @@ class TestCommentInfoConstruction:
     REQUIREMENT: CommentInfo holds a single comment with thread and file context.
 
     WHO: CommentAnalysis.active_comments field.
-    WHAT: Ten fields: thread_id, thread_status, author, content_preview, full_content,
-          created_date, is_deleted, file_path, line_start, line_end.
-          file_path/line_start/line_end are nullable for comments without file context.
+    WHAT: (1) a comment with full file context has all ten fields accessible
+          (2) a comment without file context has None for file_path,
+              line_start, and line_end
     WHY: Typed container replaces nested dicts for individual comment metadata.
 
     MOCK BOUNDARY:
@@ -611,9 +618,9 @@ class TestCommentAnalysisConstruction:
     REQUIREMENT: CommentAnalysis holds full comment analysis results for a PR.
 
     WHO: Consumers of analyze_pr_comments() — MCP tools, review dashboards.
-    WHAT: Six fields: pr_id, comment_summary (CommentSummary), comment_authors
-          (dict[str, int]), author_samples (dict[str, AuthorSample]),
-          active_comments (list[CommentInfo]), resolution_ready (bool).
+    WHAT: (1) all fields including nested CommentSummary, AuthorSample, and
+              CommentInfo are accessible with correct types
+          (2) resolution_ready=True when no active comments remain
     WHY: Replaces untyped Dict[str, Any] returns from PDP. Provides typed
          access to all comment analysis state.
 

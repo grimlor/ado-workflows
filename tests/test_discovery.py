@@ -69,10 +69,14 @@ class TestInspectGitRepository:
     metadata.
 
     WHO: Any consumer needing org/project/repo from a local git checkout.
-    WHAT: Running ``git config --get remote.origin.url`` on a valid Azure
-          DevOps repo returns a dict with path, name, organization, project,
-          remote_url, and org_url; non-Azure DevOps repos return None;
-          subprocess failures return None.
+    WHAT: (1) a valid dev.azure.com repo returns a dict with path, name,
+              organization, project, remote_url, and org_url
+          (2) a valid visualstudio.com repo returns the legacy org_url format
+          (3) a non-Azure DevOps remote returns None
+          (4) a git command failure returns None
+          (5) a subprocess timeout returns None
+          (6) workspace_context is included with multi-repo detection
+          (7) parent permission errors degrade gracefully to single-repo
     WHY: Repository metadata is the input to every Layer 2/3 operation —
          inspect is the single source of truth for what repo the user is in.
 
@@ -262,10 +266,10 @@ class TestDiscoverRepositories:
     REQUIREMENT: All Azure DevOps git repos under a root are discovered.
 
     WHO: Any consumer needing to enumerate repos in a workspace.
-    WHAT: If search_root itself is a git repo, returns a single-element
-          list; otherwise scans immediate children for git repos; non-git
-          directories and non-ADO repos are excluded; permission errors are
-          handled gracefully.
+    WHAT: (1) if search_root itself is a git repo, returns a single-element list
+          (2) a multi-repo workspace discovers all Azure DevOps children
+          (3) an empty workspace returns an empty list
+          (4) permission errors during scan return an empty list
     WHY: Multi-repo workspaces are common in enterprise environments —
          correct enumeration is the prerequisite for intelligent repo
          selection.
@@ -379,10 +383,13 @@ class TestInferTargetRepository:
 
     WHO: Any consumer needing to resolve which repo the user intends to
          work with.
-    WHAT: When working_directory is inside a repo's path, that repo is
-          selected; when only one repo exists, it is selected automatically;
-          when no match is found and cwd is inside a repo, that repo is
-          selected; when truly ambiguous, None is returned.
+    WHAT: (1) when working_directory is inside a repo's path, that repo is
+              selected
+          (2) when only one repo exists, it is selected automatically
+          (3) an empty repository list returns None
+          (4) when truly ambiguous (multiple repos, no match), None is returned
+          (5) when no working_directory hint is given, os.getcwd() fallback
+              selects the matching repo
     WHY: Multi-repo workspaces require intelligent default selection —
          forcing users to specify a repo for every operation is
          unacceptable UX.

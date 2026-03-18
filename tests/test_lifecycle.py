@@ -53,10 +53,13 @@ class TestCreatePullRequest:
     a typed result.
 
     WHO: MCP tools, CI integrations, any automation creating PRs.
-    WHAT: Normalizes branch names (prepends refs/heads/ if missing),
-          constructs GitPullRequest model, calls client.git.create_pull_request(),
-          extracts pull_request_id and URL from the SDK response, raises
-          ActionableError on SDK failure.
+    WHAT: (1) valid branches return a CreatedPR with correct fields from
+              the SDK response
+          (2) branch names without refs/heads/ prefix are normalized
+          (3) branch names already with refs/heads/ prefix are not doubled
+          (4) optional title and description are passed to the SDK model
+          (5) is_draft=True is passed to the SDK model
+          (6) an SDK exception raises ActionableError
     WHY: Replaces az repos pr create subprocess call. SDK passes objects
          directly, eliminating CLI JSON-encoding fragility.
 
