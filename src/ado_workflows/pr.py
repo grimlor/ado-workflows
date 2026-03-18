@@ -1,8 +1,8 @@
-"""Layer 3 — PR context resolution.
+"""Layer 3 — PR context resolution and identity.
 
 Composes Layer 1 (URL parsing) and Layer 2 (RepositoryContext) to establish
 a fully resolved PR context from either a URL or a numeric PR ID.
-No SDK calls — just context resolution.
+Also provides :func:`get_pr_author` for extracting the PR creator's identity.
 
 Typical usage::
 
@@ -15,12 +15,16 @@ Typical usage::
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from actionable_errors import ActionableError
 
 from ado_workflows.context import RepositoryContext
+from ado_workflows.models import UserIdentity
 from ado_workflows.parsing import parse_ado_url
+
+if TYPE_CHECKING:
+    from ado_workflows.client import AdoClient
 
 _SERVICE = "Azure DevOps"
 
@@ -68,9 +72,7 @@ class AzureDevOpsPRContext:
             raise ActionableError.validation(
                 service=_SERVICE,
                 field_name="pr_url",
-                reason=(
-                    f"Could not extract {', '.join(missing)} from URL: {pr_url}"
-                ),
+                reason=(f"Could not extract {', '.join(missing)} from URL: {pr_url}"),
                 suggestion=(
                     "Provide a full PR URL like "
                     "https://dev.azure.com/{{org}}/{{project}}/_git/{{repo}}/pullrequest/{{id}}"
@@ -117,10 +119,7 @@ class AzureDevOpsPRContext:
         project = repo_info["project"]
         repository = repo_info["name"]
 
-        pr_url = (
-            f"https://dev.azure.com/{org}/{project}"
-            f"/_git/{repository}/pullrequest/{pr_id}"
-        )
+        pr_url = f"https://dev.azure.com/{org}/{project}/_git/{repository}/pullrequest/{pr_id}"
 
         return cls(
             pr_url=pr_url,
@@ -190,12 +189,54 @@ def establish_pr_context(
     raise ActionableError.validation(
         service=_SERVICE,
         field_name="url_or_id",
-        reason=(
-            f"'{url_or_id}' is not a valid PR URL or numeric PR ID."
-        ),
+        reason=(f"'{url_or_id}' is not a valid PR URL or numeric PR ID."),
         suggestion=(
             "Pass a PR URL like "
             "https://dev.azure.com/{{org}}/{{project}}/_git/{{repo}}/pullrequest/{{id}} "
             "or a numeric PR ID like '42'."
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# PR identity helpers
+# ---------------------------------------------------------------------------
+
+
+def get_pr_author(
+    client: AdoClient,
+    pr_id: int,
+    project: str,
+) -> UserIdentity:
+    """Return the identity of the PR creator.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        pr_id: Pull request ID.
+        project: Azure DevOps project name or GUID.
+
+    Returns:
+        :class:`~models.UserIdentity` with display name, GUID, and email.
+
+    Raises:
+        ActionableError: When the PR does not exist or cannot be fetched.
+    """
+    try:
+        pr = client.git.get_pull_request_by_id(pr_id, project=project)
+    except Exception as exc:
+        raise ActionableError.not_found(
+            service="AzureDevOps",
+            resource_type="pull_request",
+            resource_id=str(pr_id),
+            raw_error=str(exc),
+            suggestion=(
+                f"Verify PR {pr_id} exists in project '{project}' and that you have read access."
+            ),
+        ) from exc
+
+    author = pr.created_by
+    return UserIdentity(
+        display_name=author.display_name,
+        id=author.id,
+        unique_name=getattr(author, "unique_name", None),
     )

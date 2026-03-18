@@ -68,7 +68,8 @@ def fetch_required_approvals(
 
     try:
         evaluations = client.policy.get_policy_evaluations(
-            project, artifact_id,
+            project,
+            artifact_id,
         )
     except Exception as exc:
         raise ActionableError.internal(
@@ -217,7 +218,9 @@ def get_review_status(
 
     # Step 2 — Fetch commits (latest commit date for staleness detection)
     commits = client.git.get_pull_request_commits(
-        repository, pr_id, project=project,
+        repository,
+        pr_id,
+        project=project,
     )
     last_commit_date: datetime | None = None
     if commits:
@@ -228,7 +231,9 @@ def get_review_status(
     stale_voter_ids: set[str] = set()
     try:
         properties = client.git.get_pull_request_properties(
-            repository, pr_id, project=project,
+            repository,
+            pr_id,
+            project=project,
         )
         prop_value: dict[str, Any] = properties.get("value") or {}
         one_review = prop_value.get("OneReviewPolicyPilot")
@@ -238,16 +243,18 @@ def get_review_status(
                 parsed = json.loads(raw_json)
                 stale_voter_ids = set(parsed.get("staleBecauseOfPush", []))
     except Exception as exc:
-        warnings.append(ActionableError.internal(
-            service="AzureDevOps",
-            operation=f"get_pull_request_properties(PR {pr_id})",
-            raw_error=str(exc),
-            suggestion=(
-                "PR properties unavailable; tier-1 staleness detection "
-                "(OneReviewPolicyPilot) skipped. Tier-2 (vote timestamp "
-                "comparison) still active."
-            ),
-        ))
+        warnings.append(
+            ActionableError.internal(
+                service="AzureDevOps",
+                operation=f"get_pull_request_properties(PR {pr_id})",
+                raw_error=str(exc),
+                suggestion=(
+                    "PR properties unavailable; tier-1 staleness detection "
+                    "(OneReviewPolicyPilot) skipped. Tier-2 (vote timestamp "
+                    "comparison) still active."
+                ),
+            )
+        )
 
     # Step 4 — Fetch vote timestamps from thread properties
     vote_timestamps = fetch_vote_timestamps(client, repository, pr_id, project)
@@ -270,7 +277,9 @@ def get_review_status(
     # Step 7 — Fetch required approvals
     try:
         required = fetch_required_approvals(
-            client, project, pr_id,
+            client,
+            project,
+            pr_id,
             default_required_approvals=default_required_approvals,
         )
     except ActionableError as warning:
@@ -279,22 +288,14 @@ def get_review_status(
 
     # Step 8 — Compute approval status
     valid_approvers = [
-        vs for vs in vote_statuses
-        if vs.vote in (10, 5) and not vs.vote_invalidated
+        vs for vs in vote_statuses if vs.vote in (10, 5) and not vs.vote_invalidated
     ]
     invalidated_approvers = [
-        vs for vs in vote_statuses
-        if vs.vote in (10, 5) and vs.vote_invalidated
+        vs for vs in vote_statuses if vs.vote in (10, 5) and vs.vote_invalidated
     ]
-    rejecting_reviewers = [
-        vs for vs in vote_statuses if vs.vote == -10
-    ]
-    waiting_reviewers = [
-        vs for vs in vote_statuses if vs.vote == -5
-    ]
-    pending_reviewers = [
-        vs for vs in vote_statuses if vs.vote == 0
-    ]
+    rejecting_reviewers = [vs for vs in vote_statuses if vs.vote == -10]
+    waiting_reviewers = [vs for vs in vote_statuses if vs.vote == -5]
+    pending_reviewers = [vs for vs in vote_statuses if vs.vote == 0]
 
     has_rejection = len(rejecting_reviewers) > 0
     valid_count = len(valid_approvers)
@@ -370,7 +371,9 @@ def analyze_pending_reviews(
     criteria = GitPullRequestSearchCriteria(status="active")
     try:
         all_prs = client.git.get_pull_requests(
-            repository, criteria, project=project,
+            repository,
+            criteria,
+            project=project,
         )
     except Exception as exc:
         raise ActionableError.connection(
@@ -403,17 +406,22 @@ def analyze_pending_reviews(
         # Step 3 — Per-PR enrichment (wrapped in try/except)
         try:
             pending_pr = _enrich_pr(
-                client, pr, project, repository,
+                client,
+                pr,
+                project,
+                repository,
                 default_required_approvals=default_required_approvals,
                 now=now,
             )
         except Exception as exc:
             pr_id: int = pr.pull_request_id
-            skipped.append(ActionableError.internal(
-                service="AzureDevOps",
-                operation=f"enrich_pr({pr_id})",
-                raw_error=str(exc),
-            ))
+            skipped.append(
+                ActionableError.internal(
+                    service="AzureDevOps",
+                    operation=f"enrich_pr({pr_id})",
+                    raw_error=str(exc),
+                )
+            )
             continue
 
         # Step 4 — Only include PRs that still need attention
@@ -443,7 +451,9 @@ def _enrich_pr(
 
     # Fetch commits (latest commit date for staleness detection)
     commits = client.git.get_pull_request_commits(
-        repository, pr_id, project=project,
+        repository,
+        pr_id,
+        project=project,
     )
     last_commit_date: datetime | None = None
     if commits:
@@ -453,7 +463,9 @@ def _enrich_pr(
     stale_voter_ids: set[str] = set()
     try:
         properties = client.git.get_pull_request_properties(
-            repository, pr_id, project=project,
+            repository,
+            pr_id,
+            project=project,
         )
         prop_value: dict[str, Any] = properties.get("value") or {}
         one_review = prop_value.get("OneReviewPolicyPilot")
@@ -486,7 +498,9 @@ def _enrich_pr(
     # Fetch required approvals
     try:
         required = fetch_required_approvals(
-            client, project, pr_id,
+            client,
+            project,
+            pr_id,
             default_required_approvals=default_required_approvals,
         )
     except ActionableError:
@@ -494,8 +508,7 @@ def _enrich_pr(
 
     # Compute approval counts
     valid_approvers = [
-        vs for vs in vote_statuses
-        if vs.vote in (10, 5) and not vs.vote_invalidated
+        vs for vs in vote_statuses if vs.vote in (10, 5) and not vs.vote_invalidated
     ]
     valid_count = len(valid_approvers)
     needs = max(0, required - valid_count)

@@ -63,21 +63,11 @@ class TestURLParsing:
         assert ctx.organization == "MyOrg", (
             f"Expected organization 'MyOrg', got '{ctx.organization}'"
         )
-        assert ctx.project == "MyProject", (
-            f"Expected project 'MyProject', got '{ctx.project}'"
-        )
-        assert ctx.repository == "MyRepo", (
-            f"Expected repository 'MyRepo', got '{ctx.repository}'"
-        )
-        assert ctx.pr_id == 123, (
-            f"Expected pr_id 123, got {ctx.pr_id}"
-        )
-        assert ctx.source == "url", (
-            f"Expected source 'url', got '{ctx.source}'"
-        )
-        assert ctx.pr_url == url, (
-            f"Expected pr_url to be the original URL, got '{ctx.pr_url}'"
-        )
+        assert ctx.project == "MyProject", f"Expected project 'MyProject', got '{ctx.project}'"
+        assert ctx.repository == "MyRepo", f"Expected repository 'MyRepo', got '{ctx.repository}'"
+        assert ctx.pr_id == 123, f"Expected pr_id 123, got {ctx.pr_id}"
+        assert ctx.source == "url", f"Expected source 'url', got '{ctx.source}'"
+        assert ctx.pr_url == url, f"Expected pr_url to be the original URL, got '{ctx.pr_url}'"
 
     def test_visualstudio_com_pr_url_produces_correct_context(self) -> None:
         """
@@ -95,18 +85,10 @@ class TestURLParsing:
         assert ctx.organization == "myorg", (
             f"Expected organization 'myorg', got '{ctx.organization}'"
         )
-        assert ctx.project == "MyProject", (
-            f"Expected project 'MyProject', got '{ctx.project}'"
-        )
-        assert ctx.repository == "MyRepo", (
-            f"Expected repository 'MyRepo', got '{ctx.repository}'"
-        )
-        assert ctx.pr_id == 456, (
-            f"Expected pr_id 456, got {ctx.pr_id}"
-        )
-        assert ctx.source == "url", (
-            f"Expected source 'url', got '{ctx.source}'"
-        )
+        assert ctx.project == "MyProject", f"Expected project 'MyProject', got '{ctx.project}'"
+        assert ctx.repository == "MyRepo", f"Expected repository 'MyRepo', got '{ctx.repository}'"
+        assert ctx.pr_id == 456, f"Expected pr_id 456, got {ctx.pr_id}"
+        assert ctx.source == "url", f"Expected source 'url', got '{ctx.source}'"
 
     def test_url_missing_pr_id_raises_actionable_error(self) -> None:
         """
@@ -213,18 +195,12 @@ class TestRepositoryContextResolution:
     ) -> None:
         """Populate RepositoryContext cache — mocks only subprocess (I/O edge)."""
         (Path(directory) / ".git").mkdir(exist_ok=True)
-        remote_url = (
-            f"https://dev.azure.com/{organization}/{project}/_git/{repo_name}"
-        )
+        remote_url = f"https://dev.azure.com/{organization}/{project}/_git/{repo_name}"
         mock_git = MagicMock(returncode=0, stdout=f"{remote_url}\n")
-        with patch(
-            "ado_workflows.discovery.subprocess.run", return_value=mock_git
-        ):
+        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
             RepositoryContext.set(directory)
 
-    def test_cached_context_produces_correct_pr_context(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cached_context_produces_correct_pr_context(self, tmp_path: Path) -> None:
         """
         Given RepositoryContext has cached context
         When from_pr_id(42) is called
@@ -243,22 +219,16 @@ class TestRepositoryContextResolution:
         assert ctx.organization == "ContosoOrg", (
             f"Expected organization 'ContosoOrg', got '{ctx.organization}'"
         )
-        assert ctx.project == "Payments", (
-            f"Expected project 'Payments', got '{ctx.project}'"
-        )
+        assert ctx.project == "Payments", f"Expected project 'Payments', got '{ctx.project}'"
         assert ctx.repository == "PaymentsRepo", (
             f"Expected repository 'PaymentsRepo', got '{ctx.repository}'"
         )
-        assert ctx.pr_id == 42, (
-            f"Expected pr_id 42, got {ctx.pr_id}"
-        )
+        assert ctx.pr_id == 42, f"Expected pr_id 42, got {ctx.pr_id}"
         assert ctx.source == "repository_context", (
             f"Expected source 'repository_context', got '{ctx.source}'"
         )
 
-    def test_no_context_raises_actionable_error_suggesting_set(
-        self, tmp_path: Path
-    ) -> None:
+    def test_no_context_raises_actionable_error_suggesting_set(self, tmp_path: Path) -> None:
         """
         Given RepositoryContext has no cached context and discovery finds nothing
         When from_pr_id(42) is called with an empty directory
@@ -301,15 +271,10 @@ class TestRepositoryContextResolution:
         specific_dir.mkdir()
         (specific_dir / ".git").mkdir()
 
-        specific_url = (
-            "https://dev.azure.com/SpecificOrg/SpecificProject"
-            "/_git/SpecificRepo"
-        )
+        specific_url = "https://dev.azure.com/SpecificOrg/SpecificProject/_git/SpecificRepo"
         mock_git = MagicMock(returncode=0, stdout=f"{specific_url}\n")
 
-        with patch(
-            "ado_workflows.discovery.subprocess.run", return_value=mock_git
-        ):
+        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
             # When: from_pr_id() is called with an explicit working_directory
             ctx = AzureDevOpsPRContext.from_pr_id(42, str(specific_dir))
 
@@ -319,9 +284,7 @@ class TestRepositoryContextResolution:
             f"got '{ctx.organization}' — working_directory may not have been forwarded"
         )
 
-    def test_error_dict_from_context_raises_actionable_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_error_dict_from_context_raises_actionable_error(self, tmp_path: Path) -> None:
         """
         Given discovery finds no repositories at the specified directory
         When from_pr_id(42, empty_dir) is called
@@ -381,19 +344,13 @@ class TestPRContextFactory:
         ctx = establish_pr_context(url)
 
         # Then: context was created via the URL path
-        assert ctx.source == "url", (
-            f"Expected source 'url', got '{ctx.source}'"
-        )
+        assert ctx.source == "url", f"Expected source 'url', got '{ctx.source}'"
         assert ctx.organization == "ContosoOrg", (
             f"Expected organization 'ContosoOrg', got '{ctx.organization}'"
         )
-        assert ctx.pr_id == 99, (
-            f"Expected pr_id 99, got {ctx.pr_id}"
-        )
+        assert ctx.pr_id == 99, f"Expected pr_id 99, got {ctx.pr_id}"
 
-    def test_numeric_string_delegates_to_from_pr_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_numeric_string_delegates_to_from_pr_id(self, tmp_path: Path) -> None:
         """
         Given a numeric string "42"
         When establish_pr_context("42") is called
@@ -404,13 +361,9 @@ class TestPRContextFactory:
         repo_dir = tmp_path / "PaymentsRepo"
         repo_dir.mkdir()
         (repo_dir / ".git").mkdir()
-        remote_url = (
-            "https://dev.azure.com/ContosoOrg/Payments/_git/PaymentsRepo"
-        )
+        remote_url = "https://dev.azure.com/ContosoOrg/Payments/_git/PaymentsRepo"
         mock_git = MagicMock(returncode=0, stdout=f"{remote_url}\n")
-        with patch(
-            "ado_workflows.discovery.subprocess.run", return_value=mock_git
-        ):
+        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
             RepositoryContext.set(str(repo_dir))
 
         # When: the factory receives a numeric string
@@ -420,9 +373,7 @@ class TestPRContextFactory:
         assert ctx.source == "repository_context", (
             f"Expected source 'repository_context', got '{ctx.source}'"
         )
-        assert ctx.pr_id == 42, (
-            f"Expected pr_id 42, got {ctx.pr_id}"
-        )
+        assert ctx.pr_id == 42, f"Expected pr_id 42, got {ctx.pr_id}"
 
     def test_non_numeric_non_url_string_raises_actionable_error(self) -> None:
         """
@@ -555,17 +506,12 @@ class TestSerialization:
         assert result["repository"] == "PaymentsRepo", (
             f"Expected repository 'PaymentsRepo', got '{result.get('repository')}'"
         )
-        assert result["pr_id"] == 99, (
-            f"Expected pr_id 99, got {result.get('pr_id')}"
-        )
-        assert result["source"] == "url", (
-            f"Expected source 'url', got '{result.get('source')}'"
-        )
+        assert result["pr_id"] == 99, f"Expected pr_id 99, got {result.get('pr_id')}"
+        assert result["source"] == "url", f"Expected source 'url', got '{result.get('source')}'"
 
         # Then: computed property org_url is included
         assert result["org_url"] == "https://dev.azure.com/ContosoOrg", (
-            f"Expected org_url 'https://dev.azure.com/ContosoOrg', "
-            f"got '{result.get('org_url')}'"
+            f"Expected org_url 'https://dev.azure.com/ContosoOrg', got '{result.get('org_url')}'"
         )
 
         # Then: exactly 7 keys total (6 dataclass + org_url)

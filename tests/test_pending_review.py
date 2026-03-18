@@ -59,14 +59,15 @@ def _make_pr(
     pr.created_by = Mock()
     pr.created_by.unique_name = author
     pr.creation_date = (
-        datetime.now(tz=UTC) - timedelta(days=5)
-        if creation_date is _UNSET
-        else creation_date
+        datetime.now(tz=UTC) - timedelta(days=5) if creation_date is _UNSET else creation_date
     )
     pr.is_draft = is_draft
     pr.reviewers = reviewers or []
     pr.merge_status = merge_status
-    pr.url = url or f"https://dev.azure.com/Org/Proj/_apis/git/repositories/{repository_name}/pullRequests/{pr_id}"
+    pr.url = (
+        url
+        or f"https://dev.azure.com/Org/Proj/_apis/git/repositories/{repository_name}/pullRequests/{pr_id}"
+    )
     pr.repository = Mock()
     pr.repository.name = repository_name
     # web_url construction: ADO SDK PRs have a _links.web.href or we build it
@@ -93,8 +94,15 @@ def _make_reviewer(
         is_container=is_container,
         voted_for=voted_for,
         is_required=is_required,
-        spec=["display_name", "unique_name", "id", "vote",
-              "is_container", "voted_for", "is_required"],
+        spec=[
+            "display_name",
+            "unique_name",
+            "id",
+            "vote",
+            "is_container",
+            "voted_for",
+            "is_required",
+        ],
     )
 
 
@@ -203,12 +211,16 @@ class TestAnalyzePendingReviewsOrchestration:
         """
         # Given: 2 active PRs, each with a pending reviewer (vote=0)
         reviewer1 = _make_reviewer(
-            display_name="Bob", unique_name="bob@ex.com",
-            reviewer_id="guid-b", vote=0,
+            display_name="Bob",
+            unique_name="bob@ex.com",
+            reviewer_id="guid-b",
+            vote=0,
         )
         reviewer2 = _make_reviewer(
-            display_name="Carol", unique_name="carol@ex.com",
-            reviewer_id="guid-c", vote=0,
+            display_name="Carol",
+            unique_name="carol@ex.com",
+            reviewer_id="guid-c",
+            vote=0,
         )
         pr1 = _make_pr(pr_id=10, title="PR One", reviewers=[reviewer1])
         pr2 = _make_pr(pr_id=20, title="PR Two", reviewers=[reviewer2])
@@ -229,9 +241,7 @@ class TestAnalyzePendingReviewsOrchestration:
         assert 10 in pr_ids, f"Expected PR 10 in results, got {pr_ids}"
         assert 20 in pr_ids, f"Expected PR 20 in results, got {pr_ids}"
         for p in result.pending_prs:
-            assert len(p.pending_reviewers) > 0, (
-                f"PR {p.pr_id} should have pending reviewers"
-            )
+            assert len(p.pending_reviewers) > 0, f"PR {p.pr_id} should have pending reviewers"
 
     def test_draft_pr_excluded(self) -> None:
         """
@@ -266,11 +276,13 @@ class TestAnalyzePendingReviewsOrchestration:
         # Given: one PR 5 days old, one 45 days old, max_days_old=30
         reviewer = _make_reviewer(vote=0)
         young = _make_pr(
-            pr_id=1, reviewers=[reviewer],
+            pr_id=1,
+            reviewers=[reviewer],
             creation_date=datetime.now(tz=UTC) - timedelta(days=5),
         )
         old = _make_pr(
-            pr_id=2, reviewers=[reviewer],
+            pr_id=2,
+            reviewers=[reviewer],
             creation_date=datetime.now(tz=UTC) - timedelta(days=45),
         )
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
@@ -281,7 +293,10 @@ class TestAnalyzePendingReviewsOrchestration:
 
         # When: analyzed with max_days_old=30
         result = analyze_pending_reviews(
-            client, "Proj", "Repo", max_days_old=30,
+            client,
+            "Proj",
+            "Repo",
+            max_days_old=30,
         )
 
         # Then: only the young PR is included
@@ -307,7 +322,10 @@ class TestAnalyzePendingReviewsOrchestration:
 
         # When: filtered to alice
         result = analyze_pending_reviews(
-            client, "Proj", "Repo", creator_filter="alice",
+            client,
+            "Proj",
+            "Repo",
+            creator_filter="alice",
         )
 
         # Then: only Alice's PR is returned
@@ -323,10 +341,14 @@ class TestAnalyzePendingReviewsOrchestration:
         """
         # Given: PR with 2 approved reviewers, policy requires 2
         r1 = _make_reviewer(
-            display_name="Bob", reviewer_id="guid-b", vote=10,
+            display_name="Bob",
+            reviewer_id="guid-b",
+            vote=10,
         )
         r2 = _make_reviewer(
-            display_name="Carol", reviewer_id="guid-c", vote=10,
+            display_name="Carol",
+            reviewer_id="guid-c",
+            vote=10,
         )
         pr = _make_pr(pr_id=1, reviewers=[r1, r2])
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
@@ -353,7 +375,9 @@ class TestAnalyzePendingReviewsOrchestration:
         """
         # Given: PR with 1 approved reviewer who is stale (via PR properties)
         reviewer = _make_reviewer(
-            display_name="Bob", reviewer_id="guid-b", vote=10,
+            display_name="Bob",
+            reviewer_id="guid-b",
+            vote=10,
         )
         pr = _make_pr(pr_id=1, reviewers=[reviewer])
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(hours=1))
@@ -391,17 +415,24 @@ class TestAnalyzePendingReviewsOrchestration:
         """
         # Given: individual Alice approved + team container (voted_for Alice)
         team = _make_reviewer(
-            display_name="Team", reviewer_id="guid-team",
-            vote=10, is_container=True, voted_for=[],
+            display_name="Team",
+            reviewer_id="guid-team",
+            vote=10,
+            is_container=True,
+            voted_for=[],
         )
         alice = _make_reviewer(
-            display_name="Alice", reviewer_id="guid-alice",
-            vote=10, is_container=False,
+            display_name="Alice",
+            reviewer_id="guid-alice",
+            vote=10,
+            is_container=False,
             voted_for=[Mock(id="guid-team")],
         )
         pending = _make_reviewer(
-            display_name="PendingGuy", reviewer_id="guid-pending",
-            vote=0, is_container=False,
+            display_name="PendingGuy",
+            reviewer_id="guid-pending",
+            vote=0,
+            is_container=False,
         )
         pr = _make_pr(pr_id=1, reviewers=[team, alice, pending])
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
@@ -432,10 +463,14 @@ class TestAnalyzePendingReviewsOrchestration:
         """
         # Given: policy requires 3, only 1 approver
         reviewer = _make_reviewer(
-            display_name="Bob", reviewer_id="guid-b", vote=10,
+            display_name="Bob",
+            reviewer_id="guid-b",
+            vote=10,
         )
         pending = _make_reviewer(
-            display_name="Carol", reviewer_id="guid-c", vote=0,
+            display_name="Carol",
+            reviewer_id="guid-c",
+            vote=0,
         )
         pr = _make_pr(pr_id=1, reviewers=[reviewer, pending])
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
@@ -467,17 +502,20 @@ class TestAnalyzePendingReviewsOrchestration:
         # Given: 3 PRs with different ages
         reviewer = _make_reviewer(vote=0)
         pr_new = _make_pr(
-            pr_id=1, title="New",
+            pr_id=1,
+            title="New",
             creation_date=datetime.now(tz=UTC) - timedelta(days=2),
             reviewers=[reviewer],
         )
         pr_mid = _make_pr(
-            pr_id=2, title="Mid",
+            pr_id=2,
+            title="Mid",
             creation_date=datetime.now(tz=UTC) - timedelta(days=10),
             reviewers=[reviewer],
         )
         pr_old = _make_pr(
-            pr_id=3, title="Old",
+            pr_id=3,
+            title="Old",
             creation_date=datetime.now(tz=UTC) - timedelta(days=20),
             reviewers=[reviewer],
         )
@@ -492,9 +530,7 @@ class TestAnalyzePendingReviewsOrchestration:
 
         # Then: sorted oldest first (descending days_open)
         days = [p.days_open for p in result.pending_prs]
-        assert days == sorted(days, reverse=True), (
-            f"Expected days_open descending, got {days}"
-        )
+        assert days == sorted(days, reverse=True), f"Expected days_open descending, got {days}"
 
 
 # ---------------------------------------------------------------------------
@@ -575,9 +611,7 @@ class TestAnalyzePendingReviewsErrorHandling:
         assert result.pending_prs[0].pr_id == 1, (
             f"Expected PR 1 in results, got {result.pending_prs[0].pr_id}"
         )
-        assert len(result.skipped) == 1, (
-            f"Expected 1 skipped error, got {len(result.skipped)}"
-        )
+        assert len(result.skipped) == 1, f"Expected 1 skipped error, got {len(result.skipped)}"
         assert isinstance(result.skipped[0], ActionableError), (
             f"Expected ActionableError, got {type(result.skipped[0])}"
         )
@@ -598,12 +632,8 @@ class TestAnalyzePendingReviewsErrorHandling:
         result = analyze_pending_reviews(client, "Proj", "Repo")
 
         # Then: empty result
-        assert result.pending_prs == [], (
-            f"Expected empty pending_prs, got {result.pending_prs}"
-        )
-        assert result.skipped == [], (
-            f"Expected empty skipped, got {result.skipped}"
-        )
+        assert result.pending_prs == [], f"Expected empty pending_prs, got {result.pending_prs}"
+        assert result.skipped == [], f"Expected empty skipped, got {result.skipped}"
 
     def test_multiple_prs_fail_enrichment(self) -> None:
         """
@@ -628,15 +658,11 @@ class TestAnalyzePendingReviewsErrorHandling:
         assert len(result.pending_prs) == 0, (
             f"Expected 0 pending PRs, got {len(result.pending_prs)}"
         )
-        assert len(result.skipped) == 3, (
-            f"Expected 3 skipped errors, got {len(result.skipped)}"
-        )
+        assert len(result.skipped) == 3, f"Expected 3 skipped errors, got {len(result.skipped)}"
         skipped_messages = [str(e) for e in result.skipped]
         for pr_id in [10, 20, 30]:
             found = any(str(pr_id) in msg for msg in skipped_messages)
-            assert found, (
-                f"Expected PR {pr_id} named in skipped errors, got: {skipped_messages}"
-            )
+            assert found, f"Expected PR {pr_id} named in skipped errors, got: {skipped_messages}"
 
 
 # ---------------------------------------------------------------------------
@@ -688,12 +714,10 @@ class TestAnalyzePendingReviewsEdgeCases:
             f"Expected 1 pending PR, got {len(result.pending_prs)}"
         )
         assert result.pending_prs[0].pending_reviewers == [], (
-            f"Expected empty pending_reviewers, "
-            f"got {result.pending_prs[0].pending_reviewers}"
+            f"Expected empty pending_reviewers, got {result.pending_prs[0].pending_reviewers}"
         )
         assert result.pending_prs[0].needs_approvals_count == 2, (
-            f"Expected needs_approvals_count=2, "
-            f"got {result.pending_prs[0].needs_approvals_count}"
+            f"Expected needs_approvals_count=2, got {result.pending_prs[0].needs_approvals_count}"
         )
 
     def test_pr_with_none_creation_date_excluded(self) -> None:
@@ -743,12 +767,10 @@ class TestAnalyzePendingReviewsEdgeCases:
             f"Expected 1 pending PR, got {len(result.pending_prs)}"
         )
         assert result.pending_prs[0].has_conflicts is True, (
-            f"Expected has_conflicts=True, "
-            f"got {result.pending_prs[0].has_conflicts}"
+            f"Expected has_conflicts=True, got {result.pending_prs[0].has_conflicts}"
         )
         assert result.pending_prs[0].merge_status == "conflicts", (
-            f"Expected merge_status='conflicts', "
-            f"got {result.pending_prs[0].merge_status}"
+            f"Expected merge_status='conflicts', got {result.pending_prs[0].merge_status}"
         )
 
     def test_creator_filter_case_insensitive(self) -> None:
@@ -768,13 +790,15 @@ class TestAnalyzePendingReviewsEdgeCases:
 
         # When: filtered with uppercase
         result = analyze_pending_reviews(
-            client, "Proj", "Repo", creator_filter="ALICE",
+            client,
+            "Proj",
+            "Repo",
+            creator_filter="ALICE",
         )
 
         # Then: still matched
         assert len(result.pending_prs) == 1, (
-            f"Expected 1 pending PR (case-insensitive match), "
-            f"got {len(result.pending_prs)}"
+            f"Expected 1 pending PR (case-insensitive match), got {len(result.pending_prs)}"
         )
 
     def test_properties_api_failure_gracefully_ignored(self) -> None:
@@ -798,12 +822,9 @@ class TestAnalyzePendingReviewsEdgeCases:
 
         # Then: PR still appears (properties failure is non-fatal)
         assert len(result.pending_prs) == 1, (
-            f"Expected 1 pending PR despite properties failure, "
-            f"got {len(result.pending_prs)}"
+            f"Expected 1 pending PR despite properties failure, got {len(result.pending_prs)}"
         )
-        assert not result.skipped, (
-            "Properties failure should not produce a skipped entry"
-        )
+        assert not result.skipped, "Properties failure should not produce a skipped entry"
 
     def test_policy_fetch_failure_uses_default_count(self) -> None:
         """
@@ -814,8 +835,10 @@ class TestAnalyzePendingReviewsEdgeCases:
         # Given: PR with one approval, policy call will fail
         reviewer = _make_reviewer(vote=10)  # approved
         pending = _make_reviewer(
-            display_name="Carol", unique_name="carol@example.com",
-            reviewer_id="guid-carol", vote=0,
+            display_name="Carol",
+            unique_name="carol@example.com",
+            reviewer_id="guid-carol",
+            vote=0,
         )
         pr = _make_pr(pr_id=1, reviewers=[reviewer, pending])
         commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
@@ -827,7 +850,10 @@ class TestAnalyzePendingReviewsEdgeCases:
 
         # When: analyzed with default_required_approvals=2
         result = analyze_pending_reviews(
-            client, "Proj", "Repo", default_required_approvals=2,
+            client,
+            "Proj",
+            "Repo",
+            default_required_approvals=2,
         )
 
         # Then: PR still needs attention (1 of 2 required)
@@ -840,6 +866,5 @@ class TestAnalyzePendingReviewsEdgeCases:
             f"got needs={pr_result.needs_approvals_count}"
         )
         assert pr_result.valid_approvals_count == 1, (
-            f"Expected valid_approvals_count=1, "
-            f"got {pr_result.valid_approvals_count}"
+            f"Expected valid_approvals_count=1, got {pr_result.valid_approvals_count}"
         )

@@ -49,9 +49,7 @@ def determine_vote_status(
 
     # voted_for can be None from the API — default to empty list
     voted_for = reviewer.voted_for or []
-    voted_for_ids: list[str] = [
-        vf.id for vf in voted_for if vf and vf.id
-    ]
+    voted_for_ids: list[str] = [vf.id for vf in voted_for if vf and vf.id]
 
     vote_text = VOTE_TEXT.get(vote, f"Unknown vote: {vote}")
 

@@ -37,9 +37,7 @@ from ado_workflows.discovery import (
 # ---------------------------------------------------------------------------
 
 _ADO_REMOTE = "https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n"
-_VSO_REMOTE = (
-    "https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo\n"
-)
+_VSO_REMOTE = "https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo\n"
 _GITHUB_REMOTE = "https://github.com/example/some-repo.git\n"
 
 
@@ -86,9 +84,7 @@ class TestInspectGitRepository:
                inspect_git_repository()
     """
 
-    def test_valid_dev_azure_com_repo_returns_metadata(
-        self, tmp_path: Path
-    ) -> None:
+    def test_valid_dev_azure_com_repo_returns_metadata(self, tmp_path: Path) -> None:
         """
         Given a git repo with a dev.azure.com remote
         When inspect_git_repository is called
@@ -111,20 +107,13 @@ class TestInspectGitRepository:
         assert result["project"] == "MyProject", (
             f"Expected project 'MyProject', got '{result['project']}'"
         )
-        assert result["name"] == "MyRepo", (
-            f"Expected name 'MyRepo', got '{result['name']}'"
-        )
+        assert result["name"] == "MyRepo", f"Expected name 'MyRepo', got '{result['name']}'"
         assert result["org_url"] == "https://dev.azure.com/ExampleOrg", (
-            f"Expected org_url 'https://dev.azure.com/ExampleOrg', "
-            f"got '{result['org_url']}'"
+            f"Expected org_url 'https://dev.azure.com/ExampleOrg', got '{result['org_url']}'"
         )
-        assert result["path"] == str(repo), (
-            f"Expected path '{repo}', got '{result['path']}'"
-        )
+        assert result["path"] == str(repo), f"Expected path '{repo}', got '{result['path']}'"
 
-    def test_valid_visualstudio_com_repo_returns_legacy_org_url(
-        self, tmp_path: Path
-    ) -> None:
+    def test_valid_visualstudio_com_repo_returns_legacy_org_url(self, tmp_path: Path) -> None:
         """
         Given a git repo with a visualstudio.com remote
         When inspect_git_repository is called
@@ -140,16 +129,12 @@ class TestInspectGitRepository:
             result = inspect_git_repository(str(repo))
 
         # Then: org_url uses visualstudio.com format
-        assert result is not None, (
-            "Expected dict for valid visualstudio.com repo, got None"
-        )
+        assert result is not None, "Expected dict for valid visualstudio.com repo, got None"
         assert result["org_url"] == "https://example.visualstudio.com", (
             f"Expected visualstudio.com org_url, got '{result['org_url']}'"
         )
 
-    def test_non_azure_devops_remote_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_azure_devops_remote_returns_none(self, tmp_path: Path) -> None:
         """
         Given a git repo with a GitHub remote
         When inspect_git_repository is called
@@ -167,9 +152,7 @@ class TestInspectGitRepository:
         # Then: None is returned for non-ADO repos
         assert result is None, f"Expected None for GitHub repo, got {result}"
 
-    def test_git_command_failure_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_git_command_failure_returns_none(self, tmp_path: Path) -> None:
         """
         Given a directory where git config fails
         When inspect_git_repository is called
@@ -185,13 +168,9 @@ class TestInspectGitRepository:
             result = inspect_git_repository(str(repo))
 
         # Then: None is returned
-        assert result is None, (
-            f"Expected None for failed git command, got {result}"
-        )
+        assert result is None, f"Expected None for failed git command, got {result}"
 
-    def test_subprocess_timeout_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_subprocess_timeout_returns_none(self, tmp_path: Path) -> None:
         """
         Given a directory where git config times out
         When inspect_git_repository is called
@@ -207,13 +186,9 @@ class TestInspectGitRepository:
             result = inspect_git_repository(str(repo))
 
         # Then: None is returned gracefully
-        assert result is None, (
-            f"Expected None for subprocess timeout, got {result}"
-        )
+        assert result is None, f"Expected None for subprocess timeout, got {result}"
 
-    def test_workspace_context_included_in_result(
-        self, tmp_path: Path
-    ) -> None:
+    def test_workspace_context_included_in_result(self, tmp_path: Path) -> None:
         """
         Given a valid Azure DevOps git repo in a multi-repo workspace
         When inspect_git_repository is called
@@ -235,22 +210,17 @@ class TestInspectGitRepository:
         # Then: workspace_context is present and indicates multi-repo
         assert result is not None, "Expected dict, got None"
         assert "workspace_context" in result, (
-            f"Expected workspace_context in result, got keys: "
-            f"{list(result.keys())}"
+            f"Expected workspace_context in result, got keys: {list(result.keys())}"
         )
         ctx = result["workspace_context"]
         assert ctx["is_multi_repo_workspace"] is True, (
-            f"Expected multi-repo workspace, "
-            f"got {ctx['is_multi_repo_workspace']}"
+            f"Expected multi-repo workspace, got {ctx['is_multi_repo_workspace']}"
         )
         assert ctx["workspace_root"] == str(workspace), (
-            f"Expected workspace_root '{workspace}', "
-            f"got '{ctx['workspace_root']}'"
+            f"Expected workspace_root '{workspace}', got '{ctx['workspace_root']}'"
         )
 
-    def test_workspace_context_graceful_on_parent_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_workspace_context_graceful_on_parent_permission_error(self, tmp_path: Path) -> None:
         """
         Given a valid ADO repo whose parent directory cannot be listed
         When inspect_git_repository is called
@@ -308,9 +278,7 @@ class TestDiscoverRepositories:
                discover_repositories()
     """
 
-    def test_search_root_is_git_repo_returns_single_element(
-        self, tmp_path: Path
-    ) -> None:
+    def test_search_root_is_git_repo_returns_single_element(self, tmp_path: Path) -> None:
         """
         Given search_root is itself a git repository
         When discover_repositories is called
@@ -326,17 +294,12 @@ class TestDiscoverRepositories:
             repos = discover_repositories(str(repo))
 
         # Then: exactly one repository is returned
-        assert len(repos) == 1, (
-            f"Expected 1 repo when search_root is a git repo, "
-            f"got {len(repos)}"
-        )
+        assert len(repos) == 1, f"Expected 1 repo when search_root is a git repo, got {len(repos)}"
         assert repos[0]["name"] == "MyRepo", (
             f"Expected repo name 'MyRepo', got '{repos[0]['name']}'"
         )
 
-    def test_multi_repo_workspace_discovers_all_git_children(
-        self, tmp_path: Path
-    ) -> None:
+    def test_multi_repo_workspace_discovers_all_git_children(self, tmp_path: Path) -> None:
         """
         Given search_root contains multiple git repository subdirectories
         When discover_repositories is called
@@ -351,12 +314,8 @@ class TestDiscoverRepositories:
         def git_response(*args: Any, **kwargs: Any) -> Mock:
             cwd = str(kwargs.get("cwd", ""))
             if "RepoA" in cwd:
-                return _git_success(
-                    "https://dev.azure.com/ExampleOrg/ProjA/_git/RepoA\n"
-                )
-            return _git_success(
-                "https://dev.azure.com/ExampleOrg/ProjB/_git/RepoB\n"
-            )
+                return _git_success("https://dev.azure.com/ExampleOrg/ProjA/_git/RepoA\n")
+            return _git_success("https://dev.azure.com/ExampleOrg/ProjB/_git/RepoB\n")
 
         with patch(
             "ado_workflows.discovery.subprocess.run",
@@ -367,15 +326,11 @@ class TestDiscoverRepositories:
 
         # Then: both ADO repos are found
         names = sorted(r["name"] for r in repos)
-        assert len(repos) == 2, (
-            f"Expected 2 repos, got {len(repos)}: {names}"
-        )
+        assert len(repos) == 2, f"Expected 2 repos, got {len(repos)}: {names}"
         assert "RepoA" in names, f"Expected RepoA in {names}"
         assert "RepoB" in names, f"Expected RepoB in {names}"
 
-    def test_empty_workspace_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_empty_workspace_returns_empty_list(self, tmp_path: Path) -> None:
         """
         Given search_root has no git repositories
         When discover_repositories is called
@@ -390,13 +345,9 @@ class TestDiscoverRepositories:
         repos = discover_repositories(str(workspace))
 
         # Then: empty list is returned
-        assert repos == [], (
-            f"Expected empty list for workspace with no git repos, got {repos}"
-        )
+        assert repos == [], f"Expected empty list for workspace with no git repos, got {repos}"
 
-    def test_permission_error_during_scan_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_permission_error_during_scan_returns_empty_list(self, tmp_path: Path) -> None:
         """
         Given search_root listing raises PermissionError
         When discover_repositories is called
@@ -412,9 +363,7 @@ class TestDiscoverRepositories:
             repos = discover_repositories(str(restricted))
 
             # Then: empty list rather than exception
-            assert repos == [], (
-                f"Expected empty list on PermissionError, got {repos}"
-            )
+            assert repos == [], f"Expected empty list on PermissionError, got {repos}"
         finally:
             restricted.chmod(0o755)
 
@@ -457,17 +406,11 @@ class TestInferTargetRepository:
         ]
 
         # When: inference runs with working_directory hint
-        result = infer_target_repository(
-            repos, "/workspace/RepoB/src/main.py"
-        )
+        result = infer_target_repository(repos, "/workspace/RepoB/src/main.py")
 
         # Then: RepoB is selected
-        assert result is not None, (
-            "Expected repo selection for matching working_directory"
-        )
-        assert result["name"] == "RepoB", (
-            f"Expected 'RepoB', got '{result['name']}'"
-        )
+        assert result is not None, "Expected repo selection for matching working_directory"
+        assert result["name"] == "RepoB", f"Expected 'RepoB', got '{result['name']}'"
 
     def test_single_repo_is_selected_automatically(self) -> None:
         """
@@ -485,9 +428,7 @@ class TestInferTargetRepository:
 
         # Then: the single repo is returned
         assert result is not None, "Expected single repo to be selected"
-        assert result["name"] == "OnlyRepo", (
-            f"Expected 'OnlyRepo', got '{result['name']}'"
-        )
+        assert result["name"] == "OnlyRepo", f"Expected 'OnlyRepo', got '{result['name']}'"
 
     def test_empty_list_returns_none(self) -> None:
         """
@@ -502,9 +443,7 @@ class TestInferTargetRepository:
         result = infer_target_repository(repos)
 
         # Then: None
-        assert result is None, (
-            f"Expected None for empty list, got {result}"
-        )
+        assert result is None, f"Expected None for empty list, got {result}"
 
     def test_ambiguous_selection_returns_none(self) -> None:
         """
@@ -523,9 +462,7 @@ class TestInferTargetRepository:
         result = infer_target_repository(repos, "/different/path")
 
         # Then: None (ambiguous)
-        assert result is None, (
-            f"Expected None for ambiguous selection, got {result}"
-        )
+        assert result is None, f"Expected None for ambiguous selection, got {result}"
 
     def test_cwd_fallback_selects_matching_repo(self) -> None:
         """
@@ -546,9 +483,5 @@ class TestInferTargetRepository:
             result = infer_target_repository(repos)
 
         # Then: RepoA is selected via cwd fallback
-        assert result is not None, (
-            "Expected repo selection via cwd fallback"
-        )
-        assert result["name"] == "RepoA", (
-            f"Expected 'RepoA' via cwd, got '{result['name']}'"
-        )
+        assert result is not None, "Expected repo selection via cwd fallback"
+        assert result["name"] == "RepoA", f"Expected 'RepoA' via cwd, got '{result['name']}'"

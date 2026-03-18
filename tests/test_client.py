@@ -38,11 +38,12 @@ class TestAdoClientAccess:
     REQUIREMENT: AdoClient provides typed access to Azure DevOps SDK clients.
 
     WHO: Workflow layers that need Git, Core, Work Item Tracking, or Policy operations
-    WHAT: The git property returns the Git client from the connection;
-          the core property returns the Core client;
-          the work_items property returns the Work Item Tracking client;
-          the policy property returns the Policy client;
-          each property requests the correct SDK client class path
+    WHAT: (1) the git property returns the Git client from the connection
+          (2) the core property returns the Core client
+          (3) the work_items property returns the Work Item Tracking client
+          (4) the policy property returns the Policy client
+          (5) the location property returns the Location client
+          (6) each property requests the correct SDK client class path
     WHY: Direct SDK client construction via connection.get_client(string)
          is untyped and error-prone — the wrapper provides a clean,
          discoverable API surface
@@ -66,9 +67,7 @@ class TestAdoClientAccess:
         git = client.git
 
         # Then: correct client requested
-        connection.get_client.assert_any_call(
-            "azure.devops.v7_1.git.git_client.GitClient"
-        )
+        connection.get_client.assert_any_call("azure.devops.v7_1.git.git_client.GitClient")
         assert git is not None
 
     def test_core_property_returns_core_client(self) -> None:
@@ -84,9 +83,7 @@ class TestAdoClientAccess:
         core = client.core
 
         # Then: correct client requested
-        connection.get_client.assert_any_call(
-            "azure.devops.v7_1.core.core_client.CoreClient"
-        )
+        connection.get_client.assert_any_call("azure.devops.v7_1.core.core_client.CoreClient")
         assert core is not None
 
     def test_work_items_property_returns_wit_client(self) -> None:
@@ -103,8 +100,7 @@ class TestAdoClientAccess:
 
         # Then: correct client requested
         connection.get_client.assert_any_call(
-            "azure.devops.v7_1.work_item_tracking"
-            ".work_item_tracking_client.WorkItemTrackingClient"
+            "azure.devops.v7_1.work_item_tracking.work_item_tracking_client.WorkItemTrackingClient"
         )
         assert wit is not None
 
@@ -126,6 +122,24 @@ class TestAdoClientAccess:
         )
         assert policy is not None
 
+    def test_location_property_returns_location_client(self) -> None:
+        """
+        When the location property is accessed
+        Then get_client is called with the LocationClient class path
+        """
+        # Given: a mock connection
+        connection = _mock_connection()
+        client = AdoClient(connection)
+
+        # When: location property accessed
+        location = client.location
+
+        # Then: correct client requested
+        connection.get_client.assert_any_call(
+            "azure.devops.v7_1.location.location_client.LocationClient"
+        )
+        assert location is not None
+
 
 # ---------------------------------------------------------------------------
 # TestAdoClientCaching
@@ -137,9 +151,8 @@ class TestAdoClientCaching:
     REQUIREMENT: SDK clients are lazily initialized and cached after first access.
 
     WHO: Callers accessing the same client property multiple times
-    WHAT: The first access to a client property calls get_client on the
-          connection; subsequent accesses return the cached instance without
-          calling get_client again
+    WHAT: (1) the first access to a client property calls get_client on the connection
+          (2) subsequent accesses return the cached instance without calling get_client again
     WHY: get_client may involve resource area discovery (network I/O) —
          caching avoids repeated overhead
 
@@ -245,7 +258,6 @@ class TestAdoClientCaching:
         assert "azure.devops.v7_1.git.git_client.GitClient" in paths
         assert "azure.devops.v7_1.core.core_client.CoreClient" in paths
         assert (
-            "azure.devops.v7_1.work_item_tracking"
-            ".work_item_tracking_client.WorkItemTrackingClient"
+            "azure.devops.v7_1.work_item_tracking.work_item_tracking_client.WorkItemTrackingClient"
         ) in paths
         assert "azure.devops.v7_1.policy.policy_client.PolicyClient" in paths

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fake_connection(**kw: Any) -> Mock:
     """Factory for mock Connection objects keyed by base_url."""
     return Mock(name=kw.get("base_url", "conn"))
@@ -86,9 +87,7 @@ class TestConnectionCreation:
         factory.get_connection("https://dev.azure.com/ExampleOrg")
 
         # Then: token was acquired with the correct scope
-        credential.get_token.assert_called_once_with(
-            f"{AZURE_DEVOPS_RESOURCE_ID}/.default"
-        )
+        credential.get_token.assert_called_once_with(f"{AZURE_DEVOPS_RESOURCE_ID}/.default")
         # Then: BasicTokenAuthentication received the token string
         mock_bta.assert_called_once_with({"access_token": "fake-token-abc"})
         # Then: Connection received the org URL and credentials
@@ -99,9 +98,7 @@ class TestConnectionCreation:
 
     @patch("ado_workflows.auth.Connection")
     @patch("ado_workflows.auth.BasicTokenAuthentication")
-    def test_factory_uses_provided_credential(
-        self, mock_bta: Mock, mock_conn_cls: Mock
-    ) -> None:
+    def test_factory_uses_provided_credential(self, mock_bta: Mock, mock_conn_cls: Mock) -> None:
         """
         Given an explicitly provided credential
         When get_connection is called
@@ -198,9 +195,7 @@ class TestConnectionCaching:
 
     @patch("ado_workflows.auth.Connection")
     @patch("ado_workflows.auth.BasicTokenAuthentication")
-    def test_same_org_returns_cached_connection(
-        self, mock_bta: Mock, mock_conn_cls: Mock
-    ) -> None:
+    def test_same_org_returns_cached_connection(self, mock_bta: Mock, mock_conn_cls: Mock) -> None:
         """
         Given a connection already created for an org
         When get_connection is called again with the same org URL

@@ -15,12 +15,17 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from actionable_errors import ActionableError
 from azure.devops.connection import Connection
 from azure.identity import DefaultAzureCredential
 from msrest.authentication import BasicTokenAuthentication
 
+from ado_workflows.models import UserIdentity
+
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
+
+    from ado_workflows.client import AdoClient
 
 AZURE_DEVOPS_RESOURCE_ID: str = "499b84ac-1321-427f-aa17-267ca6975798"
 """Well-known Azure DevOps resource identifier for token acquisition."""
@@ -81,3 +86,43 @@ class ConnectionFactory:
 def _normalize_org_url(org_url: str) -> str:
     """Normalize *org_url* to a consistent form for cache-key usage."""
     return org_url.rstrip("/")
+
+
+# ---------------------------------------------------------------------------
+# Identity helpers
+# ---------------------------------------------------------------------------
+
+
+def get_current_user(client: AdoClient) -> UserIdentity:
+    """Return the identity of the authenticated user.
+
+    Uses :class:`LocationClient`'s ``get_connection_data()`` to resolve
+    the authenticated user from the active connection.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+
+    Returns:
+        :class:`~models.UserIdentity` with display name and GUID.
+        ``unique_name`` is ``None`` (not available on auth identity).
+
+    Raises:
+        ActionableError: When credentials are invalid or the call fails.
+    """
+    try:
+        conn_data = client.location.get_connection_data()
+    except Exception as exc:
+        raise ActionableError.authentication(
+            service="AzureDevOps",
+            raw_error=str(exc),
+            suggestion=(
+                "Check your Azure DevOps credentials. "
+                "Try 'az login' to refresh your authentication token."
+            ),
+        ) from exc
+
+    user = conn_data.authenticated_user
+    return UserIdentity(
+        display_name=user.provider_display_name,
+        id=user.id,
+    )

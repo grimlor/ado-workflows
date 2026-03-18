@@ -86,15 +86,9 @@ class TestReviewerInfoConstruction:
         assert info.unique_name == "alice@contoso.com", (
             f"Expected unique_name 'alice@contoso.com', got '{info.unique_name}'"
         )
-        assert info.vote == 10, (
-            f"Expected vote 10, got {info.vote}"
-        )
-        assert info.is_required is True, (
-            f"Expected is_required True, got {info.is_required}"
-        )
-        assert info.is_container is False, (
-            f"Expected is_container False, got {info.is_container}"
-        )
+        assert info.vote == 10, f"Expected vote 10, got {info.vote}"
+        assert info.is_required is True, f"Expected is_required True, got {info.is_required}"
+        assert info.is_container is False, f"Expected is_container False, got {info.is_container}"
 
     def test_container_reviewer_has_is_container_true(self) -> None:
         """
@@ -170,9 +164,7 @@ class TestPendingPRConstruction:
         assert pr.title == "Add payment validation", (
             f"Expected title 'Add payment validation', got '{pr.title}'"
         )
-        assert pr.author == "Alice Smith", (
-            f"Expected author 'Alice Smith', got '{pr.author}'"
-        )
+        assert pr.author == "Alice Smith", f"Expected author 'Alice Smith', got '{pr.author}'"
         assert pr.creation_date == creation, (
             f"Expected creation_date {creation}, got {pr.creation_date}"
         )
@@ -182,23 +174,18 @@ class TestPendingPRConstruction:
         assert pr.organization == "ContosoOrg", (
             f"Expected organization 'ContosoOrg', got '{pr.organization}'"
         )
-        assert pr.project == "Payments", (
-            f"Expected project 'Payments', got '{pr.project}'"
-        )
+        assert pr.project == "Payments", f"Expected project 'Payments', got '{pr.project}'"
         assert pr.web_url.endswith("/pullrequest/42"), (
             f"Expected web_url to end with '/pullrequest/42', got '{pr.web_url}'"
         )
         assert pr.pending_reviewers == [reviewer], (
-            f"Expected pending_reviewers to contain one reviewer, "
-            f"got {pr.pending_reviewers}"
+            f"Expected pending_reviewers to contain one reviewer, got {pr.pending_reviewers}"
         )
         assert pr.days_open == 3, f"Expected days_open 3, got {pr.days_open}"
         assert pr.merge_status == "succeeded", (
             f"Expected merge_status 'succeeded', got '{pr.merge_status}'"
         )
-        assert pr.has_conflicts is False, (
-            f"Expected has_conflicts False, got {pr.has_conflicts}"
-        )
+        assert pr.has_conflicts is False, f"Expected has_conflicts False, got {pr.has_conflicts}"
 
     def test_defaults_for_approval_counts(self) -> None:
         """
@@ -283,18 +270,10 @@ class TestApprovalStatusConstruction:
         """
         # Given: VoteStatus instances for each category
         approver = _make_vote_status(name="Alice Smith", vote=10)
-        invalidated = _make_vote_status(
-            name="Bob Jones", vote=10, vote_invalidated=True
-        )
-        rejector = _make_vote_status(
-            name="Charlie Brown", vote=-10, vote_text="Rejected"
-        )
-        waiter = _make_vote_status(
-            name="Diana Prince", vote=-5, vote_text="Waiting for author"
-        )
-        pending = _make_vote_status(
-            name="Eve Wilson", vote=0, vote_text="No vote"
-        )
+        invalidated = _make_vote_status(name="Bob Jones", vote=10, vote_invalidated=True)
+        rejector = _make_vote_status(name="Charlie Brown", vote=-10, vote_text="Rejected")
+        waiter = _make_vote_status(name="Diana Prince", vote=-5, vote_text="Waiting for author")
+        pending = _make_vote_status(name="Eve Wilson", vote=0, vote_text="No vote")
 
         # When: ApprovalStatus is constructed
         status = ApprovalStatus(
@@ -309,9 +288,7 @@ class TestApprovalStatusConstruction:
         )
 
         # Then: all fields are accessible with correct values
-        assert status.is_approved is False, (
-            f"Expected is_approved False, got {status.is_approved}"
-        )
+        assert status.is_approved is False, f"Expected is_approved False, got {status.is_approved}"
         assert status.needs_approvals_count == 1, (
             f"Expected needs_approvals_count 1, got {status.needs_approvals_count}"
         )
@@ -322,16 +299,13 @@ class TestApprovalStatusConstruction:
             f"Expected 1 valid approver, got {len(status.valid_approvers)}"
         )
         assert status.valid_approvers[0].name == "Alice Smith", (
-            f"Expected approver name 'Alice Smith', "
-            f"got '{status.valid_approvers[0].name}'"
+            f"Expected approver name 'Alice Smith', got '{status.valid_approvers[0].name}'"
         )
         assert len(status.invalidated_approvers) == 1, (
-            f"Expected 1 invalidated approver, "
-            f"got {len(status.invalidated_approvers)}"
+            f"Expected 1 invalidated approver, got {len(status.invalidated_approvers)}"
         )
         assert len(status.rejecting_reviewers) == 1, (
-            f"Expected 1 rejecting reviewer, "
-            f"got {len(status.rejecting_reviewers)}"
+            f"Expected 1 rejecting reviewer, got {len(status.rejecting_reviewers)}"
         )
         assert len(status.waiting_reviewers) == 1, (
             f"Expected 1 waiting reviewer, got {len(status.waiting_reviewers)}"
@@ -365,9 +339,7 @@ class TestApprovalStatusConstruction:
         )
 
         # Then: approval state reflects fully approved
-        assert status.is_approved is True, (
-            f"Expected is_approved True, got {status.is_approved}"
-        )
+        assert status.is_approved is True, f"Expected is_approved True, got {status.is_approved}"
         assert status.needs_approvals_count == 0, (
             f"Expected needs_approvals_count 0, got {status.needs_approvals_count}"
         )
@@ -434,20 +406,15 @@ class TestReviewStatusConstruction:
         assert review.url.endswith("/pullrequest/42"), (
             f"Expected url to end with '/pullrequest/42', got '{review.url}'"
         )
-        assert review.days_open == 3, (
-            f"Expected days_open 3, got {review.days_open}"
-        )
+        assert review.days_open == 3, f"Expected days_open 3, got {review.days_open}"
         assert review.last_commit_date == commit_date, (
-            f"Expected last_commit_date {commit_date}, "
-            f"got {review.last_commit_date}"
+            f"Expected last_commit_date {commit_date}, got {review.last_commit_date}"
         )
         assert review.approval_status.is_approved is True, (
-            f"Expected nested is_approved True, "
-            f"got {review.approval_status.is_approved}"
+            f"Expected nested is_approved True, got {review.approval_status.is_approved}"
         )
         assert review.summary.startswith("Ready to merge"), (
-            f"Expected summary starting with 'Ready to merge', "
-            f"got '{review.summary}'"
+            f"Expected summary starting with 'Ready to merge', got '{review.summary}'"
         )
 
     def test_last_commit_date_none_for_empty_commit_history(self) -> None:
@@ -521,9 +488,7 @@ class TestCommentSummaryConstruction:
         assert summary.active_threads == 3, (
             f"Expected active_threads 3, got {summary.active_threads}"
         )
-        assert summary.fixed_threads == 7, (
-            f"Expected fixed_threads 7, got {summary.fixed_threads}"
-        )
+        assert summary.fixed_threads == 7, f"Expected fixed_threads 7, got {summary.fixed_threads}"
         assert summary.active_percentage == 30.0, (
             f"Expected active_percentage 30.0, got {summary.active_percentage}"
         )
@@ -559,8 +524,7 @@ class TestAuthorSampleConstruction:
         # When / Then: all fields accessible
         assert sample.count == 5, f"Expected count 5, got {sample.count}"
         assert sample.latest_comment.startswith("Looks good"), (
-            f"Expected latest_comment starting with 'Looks good', "
-            f"got '{sample.latest_comment}'"
+            f"Expected latest_comment starting with 'Looks good', got '{sample.latest_comment}'"
         )
         assert sample.latest_status == "active", (
             f"Expected latest_status 'active', got '{sample.latest_status}'"
@@ -608,19 +572,13 @@ class TestCommentInfoConstruction:
         assert info.thread_status == "active", (
             f"Expected thread_status 'active', got '{info.thread_status}'"
         )
-        assert info.author == "Alice Smith", (
-            f"Expected author 'Alice Smith', got '{info.author}'"
-        )
+        assert info.author == "Alice Smith", f"Expected author 'Alice Smith', got '{info.author}'"
         assert info.file_path == "/src/payment.py", (
             f"Expected file_path '/src/payment.py', got '{info.file_path}'"
         )
-        assert info.line_start == 42, (
-            f"Expected line_start 42, got {info.line_start}"
-        )
+        assert info.line_start == 42, f"Expected line_start 42, got {info.line_start}"
         assert info.line_end == 45, f"Expected line_end 45, got {info.line_end}"
-        assert info.is_deleted is False, (
-            f"Expected is_deleted False, got {info.is_deleted}"
-        )
+        assert info.is_deleted is False, f"Expected is_deleted False, got {info.is_deleted}"
 
     def test_comment_without_file_context(self) -> None:
         """
@@ -643,15 +601,9 @@ class TestCommentInfoConstruction:
         )
 
         # When / Then: nullable fields are None
-        assert info.file_path is None, (
-            f"Expected file_path None, got '{info.file_path}'"
-        )
-        assert info.line_start is None, (
-            f"Expected line_start None, got {info.line_start}"
-        )
-        assert info.line_end is None, (
-            f"Expected line_end None, got {info.line_end}"
-        )
+        assert info.file_path is None, f"Expected file_path None, got '{info.file_path}'"
+        assert info.line_start is None, f"Expected line_start None, got {info.line_start}"
+        assert info.line_end is None, f"Expected line_end None, got {info.line_end}"
 
 
 class TestCommentAnalysisConstruction:
@@ -713,16 +665,12 @@ class TestCommentAnalysisConstruction:
         )
 
         # Then: all fields accessible with correct types
-        assert analysis.pr_id == 42, (
-            f"Expected pr_id 42, got {analysis.pr_id}"
-        )
+        assert analysis.pr_id == 42, f"Expected pr_id 42, got {analysis.pr_id}"
         assert analysis.comment_summary.total_threads == 5, (
-            f"Expected total_threads 5, "
-            f"got {analysis.comment_summary.total_threads}"
+            f"Expected total_threads 5, got {analysis.comment_summary.total_threads}"
         )
         assert analysis.comment_authors["Alice Smith"] == 3, (
-            f"Expected Alice Smith count 3, "
-            f"got {analysis.comment_authors.get('Alice Smith')}"
+            f"Expected Alice Smith count 3, got {analysis.comment_authors.get('Alice Smith')}"
         )
         assert "Alice Smith" in analysis.author_samples, (
             f"Expected Alice Smith in author_samples, "

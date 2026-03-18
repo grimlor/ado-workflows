@@ -49,18 +49,10 @@ class TestAdoUrlParsing:
         org, project, repo, pr_id = parse_ado_url(url)
 
         # Then: all components are extracted correctly
-        assert org == "ExampleOrg", (
-            f"Expected org 'ExampleOrg', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
-        assert pr_id == "", (
-            f"Expected empty pr_id for non-PR URL, got '{pr_id}'"
-        )
+        assert org == "ExampleOrg", f"Expected org 'ExampleOrg', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
+        assert pr_id == "", f"Expected empty pr_id for non-PR URL, got '{pr_id}'"
 
     def test_modern_dev_azure_com_pr_url(self) -> None:
         """
@@ -75,18 +67,10 @@ class TestAdoUrlParsing:
         org, project, repo, pr_id = parse_ado_url(url)
 
         # Then: all components including PR ID are extracted
-        assert org == "ExampleOrg", (
-            f"Expected org 'ExampleOrg', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
-        assert pr_id == "12345", (
-            f"Expected pr_id '12345', got '{pr_id}'"
-        )
+        assert org == "ExampleOrg", f"Expected org 'ExampleOrg', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
+        assert pr_id == "12345", f"Expected pr_id '12345', got '{pr_id}'"
 
     def test_url_encoded_project_names_are_decoded(self) -> None:
         """
@@ -101,9 +85,7 @@ class TestAdoUrlParsing:
         _, project, _, _ = parse_ado_url(url)
 
         # Then: URL encoding is resolved
-        assert project == "My Project", (
-            f"Expected decoded project 'My Project', got '{project}'"
-        )
+        assert project == "My Project", f"Expected decoded project 'My Project', got '{project}'"
 
     def test_legacy_visualstudio_com_with_default_collection(self) -> None:
         """
@@ -118,18 +100,10 @@ class TestAdoUrlParsing:
         org, project, repo, pr_id = parse_ado_url(url)
 
         # Then: all components are extracted
-        assert org == "example", (
-            f"Expected org 'example', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
-        assert pr_id == "", (
-            f"Expected empty pr_id, got '{pr_id}'"
-        )
+        assert org == "example", f"Expected org 'example', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
+        assert pr_id == "", f"Expected empty pr_id, got '{pr_id}'"
 
     def test_modern_visualstudio_com_without_default_collection(self) -> None:
         """
@@ -144,15 +118,9 @@ class TestAdoUrlParsing:
         org, project, repo, _ = parse_ado_url(url)
 
         # Then: components are extracted correctly
-        assert org == "example", (
-            f"Expected org 'example', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
+        assert org == "example", f"Expected org 'example', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
 
     def test_visualstudio_com_pr_url(self) -> None:
         """
@@ -167,18 +135,10 @@ class TestAdoUrlParsing:
         org, project, repo, pr_id = parse_ado_url(url)
 
         # Then: PR ID is extracted
-        assert org == "example", (
-            f"Expected org 'example', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
-        assert pr_id == "99999", (
-            f"Expected pr_id '99999', got '{pr_id}'"
-        )
+        assert org == "example", f"Expected org 'example', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
+        assert pr_id == "99999", f"Expected pr_id '99999', got '{pr_id}'"
 
     def test_ssh_remote_url(self) -> None:
         """
@@ -193,18 +153,10 @@ class TestAdoUrlParsing:
         org, project, repo, pr_id = parse_ado_url(url)
 
         # Then: all components are extracted
-        assert org == "ExampleOrg", (
-            f"Expected org 'ExampleOrg', got '{org}'"
-        )
-        assert project == "MyProject", (
-            f"Expected project 'MyProject', got '{project}'"
-        )
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo', got '{repo}'"
-        )
-        assert pr_id == "", (
-            f"Expected empty pr_id for SSH URL, got '{pr_id}'"
-        )
+        assert org == "ExampleOrg", f"Expected org 'ExampleOrg', got '{org}'"
+        assert project == "MyProject", f"Expected project 'MyProject', got '{project}'"
+        assert repo == "MyRepo", f"Expected repo 'MyRepo', got '{repo}'"
+        assert pr_id == "", f"Expected empty pr_id for SSH URL, got '{pr_id}'"
 
     def test_ssh_remote_with_git_suffix(self) -> None:
         """
@@ -219,9 +171,7 @@ class TestAdoUrlParsing:
         _, _, repo, _ = parse_ado_url(url)
 
         # Then: .git suffix is stripped
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo' without .git suffix, got '{repo}'"
-        )
+        assert repo == "MyRepo", f"Expected repo 'MyRepo' without .git suffix, got '{repo}'"
 
     def test_https_repo_url_with_git_suffix(self) -> None:
         """
@@ -236,9 +186,7 @@ class TestAdoUrlParsing:
         _, _, repo, _ = parse_ado_url(url)
 
         # Then: .git suffix is stripped
-        assert repo == "MyRepo", (
-            f"Expected repo 'MyRepo' without .git suffix, got '{repo}'"
-        )
+        assert repo == "MyRepo", f"Expected repo 'MyRepo' without .git suffix, got '{repo}'"
 
     def test_unsupported_url_returns_empty_strings(self) -> None:
         """
@@ -310,9 +258,7 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: a datetime is returned, converted to local time
-        assert result is not None, (
-            "Expected datetime for valid ISO date, got None"
-        )
+        assert result is not None, "Expected datetime for valid ISO date, got None"
         assert result.tzinfo is None, (
             f"Expected naive datetime (local time), got tzinfo={result.tzinfo}"
         )
@@ -330,9 +276,7 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: datetime is returned with milliseconds truncated
-        assert result is not None, (
-            "Expected datetime for date with milliseconds, got None"
-        )
+        assert result is not None, "Expected datetime for date with milliseconds, got None"
         assert result.tzinfo is None, (
             f"Expected naive datetime (local time), got tzinfo={result.tzinfo}"
         )
@@ -350,9 +294,7 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: datetime is returned
-        assert result is not None, (
-            "Expected datetime for date without timezone, got None"
-        )
+        assert result is not None, "Expected datetime for date without timezone, got None"
 
     def test_empty_string_returns_none(self) -> None:
         """
@@ -367,9 +309,7 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: None is returned
-        assert result is None, (
-            f"Expected None for empty date string, got {result}"
-        )
+        assert result is None, f"Expected None for empty date string, got {result}"
 
     def test_malformed_date_returns_none(self) -> None:
         """
@@ -384,9 +324,7 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: None is returned
-        assert result is None, (
-            f"Expected None for malformed date, got {result}"
-        )
+        assert result is None, f"Expected None for malformed date, got {result}"
 
     def test_parsed_utc_date_matches_expected_components(self) -> None:
         """
@@ -401,13 +339,9 @@ class TestAdoDateParsing:
         result = parse_ado_date(date_str)
 
         # Then: date components are correct (verify via round-trip to UTC)
-        assert result is not None, (
-            "Expected datetime for valid ISO date, got None"
-        )
+        assert result is not None, "Expected datetime for valid ISO date, got None"
         # The result is in local time. Verify by converting the known input
         # to local time independently.
         expected_utc = datetime(2025, 6, 20, 10, 0, 0, tzinfo=UTC)
         expected_local = expected_utc.astimezone().replace(tzinfo=None)
-        assert result == expected_local, (
-            f"Expected {expected_local}, got {result}"
-        )
+        assert result == expected_local, f"Expected {expected_local}, got {result}"

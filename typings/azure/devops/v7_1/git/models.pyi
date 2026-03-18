@@ -72,6 +72,7 @@ class GitPullRequestCommentThread:
     status: str | None
     comments: list[Comment] | None
     thread_context: CommentThreadContext | None
+    pull_request_thread_context: GitPullRequestCommentThreadContext | None
     properties: dict[str, Any] | None
     identities: dict[str, IdentityRef] | None
     published_date: datetime | None
@@ -83,6 +84,7 @@ class GitPullRequestCommentThread:
         status: str | None = None,
         id: int | None = None,
         thread_context: CommentThreadContext | None = None,
+        pull_request_thread_context: GitPullRequestCommentThreadContext | None = None,
         properties: dict[str, Any] | None = None,
         identities: dict[str, IdentityRef] | None = None,
         published_date: datetime | None = None,
@@ -166,4 +168,74 @@ class GitPullRequest:
         is_draft: bool | None = None,
         status: str | None = None,
         **kwargs: Any,
+    ) -> None: ...
+
+
+class CommentIterationContext:
+    first_comparing_iteration: int
+    second_comparing_iteration: int
+    def __init__(
+        self,
+        *,
+        first_comparing_iteration: int | None = None,
+        second_comparing_iteration: int | None = None,
+    ) -> None: ...
+
+
+class GitPullRequestCommentThreadContext:
+    change_tracking_id: int
+    iteration_context: CommentIterationContext | None
+    def __init__(
+        self,
+        *,
+        change_tracking_id: int | None = None,
+        iteration_context: CommentIterationContext | None = None,
+    ) -> None: ...
+
+
+class GitPullRequestIteration:
+    id: int
+    created_date: datetime | None
+    description: str | None
+    def __init__(
+        self,
+        *,
+        id: int | None = None,
+        created_date: datetime | None = None,
+        description: str | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
+
+class GitPullRequestChange:
+    change_tracking_id: int
+    additional_properties: dict[str, Any]
+    def __init__(
+        self,
+        *,
+        change_tracking_id: int | None = None,
+    ) -> None: ...
+
+
+class GitPullRequestIterationChanges:
+    change_entries: list[GitPullRequestChange]
+    next_skip: int | None
+    next_top: int | None
+    def __init__(
+        self,
+        *,
+        change_entries: list[GitPullRequestChange] | None = None,
+        next_skip: int | None = None,
+        next_top: int | None = None,
+    ) -> None: ...
+
+
+class GitVersionDescriptor:
+    version: str | None
+    version_type: str | None
+    def __init__(
+        self,
+        *,
+        version: str | None = None,
+        version_type: str | None = None,
     ) -> None: ...

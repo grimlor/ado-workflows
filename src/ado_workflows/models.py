@@ -219,3 +219,110 @@ class PendingReviewResult:
 
     pending_prs: list[PendingPR]
     skipped: list[ActionableError]
+
+
+# ---------------------------------------------------------------------------
+# Code review operations types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class IterationInfo:
+    """Metadata for a single PR iteration.
+
+    Produced by :func:`iterations.get_pr_iterations`.
+    """
+
+    id: int
+    created_date: datetime | None
+    description: str | None
+
+
+@dataclass(frozen=True)
+class FileChange:
+    """A file changed in a PR iteration.
+
+    Produced by :func:`iterations.get_iteration_changes`.  The
+    ``change_tracking_id`` is required for anchoring comment threads
+    to the correct iteration in the PR diff.
+    """
+
+    path: str
+    change_type: str  # "add", "edit", "delete", "rename"
+    change_tracking_id: int
+
+
+@dataclass(frozen=True)
+class IterationContext:
+    """Resolved iteration state for comment positioning.
+
+    Produced by :func:`iterations.get_latest_iteration_context`.
+    Maps file paths (no leading slash) to their :class:`FileChange`
+    so callers can look up the ``change_tracking_id`` for any file.
+    """
+
+    iteration_id: int
+    file_changes: dict[str, FileChange]
+
+
+@dataclass(frozen=True)
+class UserIdentity:
+    """An Azure DevOps user identity with stable GUID for comparison.
+
+    Display names vary by context (e.g., ``"Alice"`` vs ``"Alice (CONTOSO)"``).
+    The ``id`` GUID is the only reliable comparator across ADO surfaces.
+    ``unique_name`` (email) is available on PR author identities but not
+    on authenticated-user identities.
+    """
+
+    display_name: str
+    id: str
+    unique_name: str | None = None
+
+
+@dataclass(frozen=True)
+class FileContent:
+    """Content of a single file from a repository.
+
+    Produced by :func:`content.get_file_content`.
+    """
+
+    path: str
+    content: str
+    encoding: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class ContentResult:
+    """Result of a batch file content fetch.
+
+    Follows partial-success pattern: successfully fetched files in
+    ``files``, failed fetches in ``failures`` with path and error detail.
+    """
+
+    files: list[FileContent]
+    failures: list[dict[str, str]]  # {path, error}
+
+
+@dataclass(frozen=True)
+class CommentPayload:
+    """Input for batch comment posting via :func:`comments.post_comments`."""
+
+    content: str
+    file_path: str | None = None
+    line_number: int | None = None
+    status: str = "active"
+
+
+@dataclass(frozen=True)
+class PostingResult:
+    """Result of a batch comment posting operation.
+
+    Follows partial-success pattern (same as :class:`ResolveResult`).
+    """
+
+    posted: list[int]  # thread IDs of successfully posted comments
+    failures: list[dict[str, object]]  # {index, error, content_preview}
+    skipped: list[int]  # indices skipped (e.g., dry_run)
+    dry_run: bool

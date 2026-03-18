@@ -92,24 +92,18 @@ class TestCreatePullRequest:
         )
 
         # Then: CreatedPR has the correct fields from the SDK response
-        assert result.pr_id == 99, (
-            f"Expected pr_id=99, got {result.pr_id}"
-        )
+        assert result.pr_id == 99, f"Expected pr_id=99, got {result.pr_id}"
         assert result.url == "https://dev.azure.com/Org/Proj/_git/Repo/pullrequest/99", (
             f"Expected correct URL, got {result.url}"
         )
-        assert result.title == "My PR", (
-            f"Expected title='My PR', got {result.title!r}"
-        )
+        assert result.title == "My PR", f"Expected title='My PR', got {result.title!r}"
         assert result.source_branch == "refs/heads/feature/abc", (
             f"Expected source_branch='refs/heads/feature/abc', got {result.source_branch!r}"
         )
         assert result.target_branch == "refs/heads/main", (
             f"Expected target_branch='refs/heads/main', got {result.target_branch!r}"
         )
-        assert result.is_draft is False, (
-            f"Expected is_draft=False, got {result.is_draft}"
-        )
+        assert result.is_draft is False, f"Expected is_draft=False, got {result.is_draft}"
 
     def test_branch_prefix_added_when_missing(self) -> None:
         """
@@ -216,9 +210,7 @@ class TestCreatePullRequest:
         assert pr_model.is_draft is True, (
             f"Expected SDK model is_draft=True, got {pr_model.is_draft}"
         )
-        assert result.is_draft is True, (
-            f"Expected result.is_draft=True, got {result.is_draft}"
-        )
+        assert result.is_draft is True, f"Expected result.is_draft=True, got {result.is_draft}"
 
     def test_sdk_exception_raises_actionable_error(self) -> None:
         """
@@ -228,9 +220,7 @@ class TestCreatePullRequest:
         """
         # Given: a client whose SDK call raises
         client = Mock()
-        client.git.create_pull_request.side_effect = Exception(
-            "TF401398: Source branch not found"
-        )
+        client.git.create_pull_request.side_effect = Exception("TF401398: Source branch not found")
 
         # When/Then: ActionableError is raised with context
         with pytest.raises(ActionableError) as exc_info:
@@ -240,6 +230,4 @@ class TestCreatePullRequest:
         assert "TF401398" in error_msg, (
             f"Expected SDK error message in ActionableError, got: {error_msg}"
         )
-        assert "Repo" in error_msg, (
-            f"Expected repository name in error, got: {error_msg}"
-        )
+        assert "Repo" in error_msg, f"Expected repository name in error, got: {error_msg}"

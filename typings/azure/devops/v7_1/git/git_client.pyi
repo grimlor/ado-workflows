@@ -9,7 +9,10 @@ from azure.devops.v7_1.git.models import (
     GitCommitRef,
     GitPullRequest,
     GitPullRequestCommentThread,
+    GitPullRequestIteration,
+    GitPullRequestIterationChanges,
     GitPullRequestSearchCriteria,
+    GitVersionDescriptor,
 )
 
 class GitClient:
@@ -92,3 +95,37 @@ class GitClient:
         include_all_urls: bool | None = None,
         include_hidden: bool | None = None,
     ) -> list[Any]: ...
+
+    def get_pull_request_iterations(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+        include_commits: bool | None = None,
+    ) -> list[GitPullRequestIteration]: ...
+
+    def get_pull_request_iteration_changes(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        iteration_id: int,
+        project: str | None = None,
+        top: int | None = None,
+        skip: int | None = None,
+        compare_to: int | None = None,
+    ) -> GitPullRequestIterationChanges: ...
+
+    def get_item_content(
+        self,
+        repository_id: str,
+        path: str | None = None,
+        project: str | None = None,
+        scope_path: str | None = None,
+        recursion_level: str | None = None,
+        include_content_metadata: bool | None = None,
+        latest_processed_change: bool | None = None,
+        download: bool | None = None,
+        format: str | None = None,
+        version_descriptor: GitVersionDescriptor | None = None,
+        include_content: bool | None = None,
+    ) -> Any: ...

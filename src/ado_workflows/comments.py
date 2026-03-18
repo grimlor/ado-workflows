@@ -9,15 +9,20 @@ analysis returning a typed :class:`~models.CommentAnalysis`),
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 
+from ado_workflows.iterations import get_latest_iteration_context
 from ado_workflows.models import (
     AuthorSample,
     CommentAnalysis,
     CommentInfo,
+    CommentPayload,
     CommentSummary,
+    IterationContext,
+    PostingResult,
     ResolveResult,
 )
 
@@ -26,7 +31,11 @@ if TYPE_CHECKING:
 
 from azure.devops.v7_1.git.models import (
     Comment,
+    CommentIterationContext,
+    CommentPosition,
+    CommentThreadContext,
     GitPullRequestCommentThread,
+    GitPullRequestCommentThreadContext,
 )
 
 
@@ -94,9 +103,7 @@ def analyze_pr_comments(
     total_threads = len(threads)
 
     active_percentage = (
-        round(len(active_threads) / total_threads * 100, 1)
-        if total_threads > 0
-        else 0.0
+        round(len(active_threads) / total_threads * 100, 1) if total_threads > 0 else 0.0
     )
 
     # Analyze comments: authors, content, file context
@@ -130,9 +137,7 @@ def analyze_pr_comments(
             comment_authors[author_name] = comment_authors.get(author_name, 0) + 1
 
             content: str = sanitize_ado_response(comment.content or "")
-            preview = (
-                content[:200] + "..." if len(content) > 200 else content
-            )
+            preview = content[:200] + "..." if len(content) > 200 else content
 
             info = CommentInfo(
                 thread_id=thread.id,
@@ -153,10 +158,7 @@ def analyze_pr_comments(
     # Build author samples (latest non-deleted comment per author)
     author_samples: dict[str, AuthorSample] = {}
     for author_name in comment_authors:
-        author_comments = [
-            c for c in all_comments
-            if c.author == author_name and not c.is_deleted
-        ]
+        author_comments = [c for c in all_comments if c.author == author_name and not c.is_deleted]
         if author_comments:
             latest = author_comments[-1]
             author_samples[author_name] = AuthorSample(
@@ -193,8 +195,17 @@ def post_comment(
     project: str,
     *,
     status: str = "active",
+    file_path: str | None = None,
+    line_number: int | None = None,
+    iteration_context: IterationContext | None = None,
 ) -> int:
     """Create a new comment thread on a pull request.
+
+    When *file_path* and *line_number* are provided, the comment is anchored
+    to that line in the PR diff.  If *iteration_context* is also provided,
+    the comment targets the correct iteration.  If *iteration_context* is
+    ``None`` but *file_path* is given, the latest iteration context is
+    auto-resolved.
 
     Args:
         client: An authenticated :class:`~client.AdoClient`.
@@ -203,24 +214,70 @@ def post_comment(
         content: Comment body text (must not be empty).
         project: Azure DevOps project name or GUID.
         status: Thread status (default ``"active"``).
+        file_path: Optional file path for line-positioned comments.
+        line_number: Optional line number (requires *file_path*).
+        iteration_context: Optional pre-resolved iteration context.
 
     Returns:
         The new thread ID.
 
     Raises:
-        ActionableError: When *content* is empty/whitespace or the SDK fails.
+        ActionableError: When *content* is empty/whitespace, when
+            *file_path*/*line_number* are inconsistent, or when the SDK fails.
     """
     if not content or not content.strip():
         raise ActionableError.validation(
             service="AzureDevOps",
             field_name="content",
             reason="Cannot post a comment with empty content.",
+            suggestion="Provide non-empty comment content.",
+        )
+
+    # Validate file_path / line_number consistency
+    if file_path is not None and line_number is None:
+        raise ActionableError.validation(
+            service="AzureDevOps",
+            field_name="line_number",
+            reason="file_path was provided without line_number.",
+            suggestion="Provide both file_path and line_number for positioned comments.",
+        )
+    if line_number is not None and file_path is None:
+        raise ActionableError.validation(
+            service="AzureDevOps",
+            field_name="file_path",
+            reason="line_number was provided without file_path.",
+            suggestion="Provide both file_path and line_number for positioned comments.",
         )
 
     thread = GitPullRequestCommentThread(
         comments=[Comment(content=content)],
         status=status,
     )
+
+    # Add file/line positioning if requested
+    if file_path is not None and line_number is not None:
+        thread.thread_context = CommentThreadContext(
+            file_path=f"/{file_path}" if not file_path.startswith("/") else file_path,
+            right_file_start=CommentPosition(line=line_number, offset=1),
+            right_file_end=CommentPosition(line=line_number, offset=1),
+        )
+
+        # Auto-resolve iteration context if not provided
+        if iteration_context is None:
+            iteration_context = get_latest_iteration_context(client, repository, pr_id, project)
+
+        # Look up change tracking ID for this file
+        file_key = file_path.lstrip("/")
+        file_change = iteration_context.file_changes.get(file_key)
+        change_tracking_id = file_change.change_tracking_id if file_change else 1
+
+        thread.pull_request_thread_context = GitPullRequestCommentThreadContext(
+            change_tracking_id=change_tracking_id,
+            iteration_context=CommentIterationContext(
+                first_comparing_iteration=1,
+                second_comparing_iteration=iteration_context.iteration_id,
+            ),
+        )
 
     try:
         response = client.git.create_thread(thread, repository, pr_id, project=project)
@@ -232,6 +289,90 @@ def post_comment(
         ) from exc
 
     return int(response.id)
+
+
+def post_comments(
+    client: AdoClient,
+    repository: str,
+    pr_id: int,
+    comments: list[CommentPayload],
+    project: str,
+    *,
+    dry_run: bool = False,
+) -> PostingResult:
+    """Batch-post comment threads with per-comment file/line positioning.
+
+    Each :class:`~models.CommentPayload` carries its own content, file_path,
+    and line_number.  Iteration context is resolved once and shared across
+    all positioned comments.
+
+    Uses partial-success semantics: individual failures are collected,
+    not raised.
+
+    When *dry_run* is ``True``, validates all comments and returns what
+    would be posted without making any API calls.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        pr_id: Pull request ID.
+        comments: List of comment payloads to post.
+        project: Azure DevOps project name or GUID.
+        dry_run: If ``True``, validate without posting.
+
+    Returns:
+        :class:`~models.PostingResult` with successes, failures, and skipped.
+    """
+    if not comments:
+        return PostingResult(posted=[], failures=[], skipped=[], dry_run=dry_run)
+
+    if dry_run:
+        return PostingResult(
+            posted=[],
+            failures=[],
+            skipped=list(range(len(comments))),
+            dry_run=True,
+        )
+
+    # Resolve iteration context once for all positioned comments
+    iter_ctx: IterationContext | None = None
+    has_positioned = any(c.file_path is not None for c in comments)
+    if has_positioned:
+        with contextlib.suppress(Exception):
+            iter_ctx = get_latest_iteration_context(client, repository, pr_id, project)
+
+    posted: list[int] = []
+    failures: list[dict[str, object]] = []
+
+    for i, comment in enumerate(comments):
+        try:
+            thread_id = post_comment(
+                client,
+                repository,
+                pr_id,
+                comment.content,
+                project,
+                status=comment.status,
+                file_path=comment.file_path,
+                line_number=comment.line_number,
+                iteration_context=iter_ctx,
+            )
+            posted.append(thread_id)
+        except Exception as exc:
+            failures.append(
+                {
+                    "index": i,
+                    "error": str(exc),
+                    "content_preview": comment.content[:80],
+                }
+            )
+
+    return PostingResult(
+        posted=posted,
+        failures=failures,
+        skipped=[],
+        dry_run=False,
+    )
 
 
 def reply_to_comment(
@@ -269,7 +410,11 @@ def reply_to_comment(
 
     try:
         response = client.git.create_comment(
-            comment, repository, pr_id, thread_id, project=project,
+            comment,
+            repository,
+            pr_id,
+            thread_id,
+            project=project,
         )
     except Exception as exc:
         raise ActionableError.connection(
@@ -318,7 +463,9 @@ def resolve_comments(
 
     # Fetch current thread statuses for skip detection
     all_threads = client.git.get_threads(
-        repository, pr_id, project=project,
+        repository,
+        pr_id,
+        project=project,
     )
     current_status: dict[int, str | None] = {t.id: t.status for t in all_threads}
 
@@ -331,7 +478,11 @@ def resolve_comments(
         thread_update = GitPullRequestCommentThread(status=status)
         try:
             client.git.update_thread(
-                thread_update, repository, pr_id, tid, project=project,
+                thread_update,
+                repository,
+                pr_id,
+                tid,
+                project=project,
             )
             resolved.append(tid)
         except Exception as exc:

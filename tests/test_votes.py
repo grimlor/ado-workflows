@@ -164,9 +164,7 @@ class TestDetermineVoteStatus:
         assert status.vote_invalidated is False, (
             f"Expected vote_invalidated False, got {status.vote_invalidated}"
         )
-        assert status.name == "Alice Smith", (
-            f"Expected name 'Alice Smith', got '{status.name}'"
-        )
+        assert status.name == "Alice Smith", f"Expected name 'Alice Smith', got '{status.name}'"
         assert status.email == "alice@contoso.com", (
             f"Expected email 'alice@contoso.com', got '{status.email}'"
         )
@@ -191,12 +189,10 @@ class TestDetermineVoteStatus:
 
         # Then: vote is invalidated by the policy
         assert status.vote_invalidated is True, (
-            f"Expected vote_invalidated True (in stale_voter_ids), "
-            f"got {status.vote_invalidated}"
+            f"Expected vote_invalidated True (in stale_voter_ids), got {status.vote_invalidated}"
         )
         assert status.invalidated_by_commit is True, (
-            f"Expected invalidated_by_commit True, "
-            f"got {status.invalidated_by_commit}"
+            f"Expected invalidated_by_commit True, got {status.invalidated_by_commit}"
         )
 
     def test_approved_vote_stale_by_timestamp_fallback(self) -> None:
@@ -224,12 +220,10 @@ class TestDetermineVoteStatus:
 
         # Then: vote is invalidated by the timestamp fallback
         assert status.vote_invalidated is True, (
-            f"Expected vote_invalidated True (timestamp fallback), "
-            f"got {status.vote_invalidated}"
+            f"Expected vote_invalidated True (timestamp fallback), got {status.vote_invalidated}"
         )
         assert status.invalidated_by_commit is True, (
-            f"Expected invalidated_by_commit True, "
-            f"got {status.invalidated_by_commit}"
+            f"Expected invalidated_by_commit True, got {status.invalidated_by_commit}"
         )
 
     def test_approved_vote_stale_by_both_policy_and_timestamp(self) -> None:
@@ -311,8 +305,7 @@ class TestDetermineVoteStatus:
             f"Expected vote_text 'Rejected', got '{status.vote_text}'"
         )
         assert status.vote_invalidated is False, (
-            f"Expected vote_invalidated False for rejection, "
-            f"got {status.vote_invalidated}"
+            f"Expected vote_invalidated False for rejection, got {status.vote_invalidated}"
         )
 
     def test_waiting_for_author_classified_correctly(self) -> None:
@@ -337,8 +330,7 @@ class TestDetermineVoteStatus:
             f"Expected vote_text 'Waiting for author', got '{status.vote_text}'"
         )
         assert status.vote_invalidated is False, (
-            f"Expected vote_invalidated False for waiting, "
-            f"got {status.vote_invalidated}"
+            f"Expected vote_invalidated False for waiting, got {status.vote_invalidated}"
         )
 
     def test_container_with_null_voted_for(self) -> None:
@@ -365,8 +357,7 @@ class TestDetermineVoteStatus:
             f"Expected is_container True, got {status.is_container}"
         )
         assert status.voted_for_ids == [], (
-            f"Expected voted_for_ids [] for null votedFor, "
-            f"got {status.voted_for_ids}"
+            f"Expected voted_for_ids [] for null votedFor, got {status.voted_for_ids}"
         )
 
     def test_individual_with_voted_for_ids(self) -> None:
@@ -389,8 +380,7 @@ class TestDetermineVoteStatus:
 
         # Then: voted_for_ids captures both team IDs
         assert status.voted_for_ids == ["team-1", "team-2"], (
-            f"Expected voted_for_ids ['team-1', 'team-2'], "
-            f"got {status.voted_for_ids}"
+            f"Expected voted_for_ids ['team-1', 'team-2'], got {status.voted_for_ids}"
         )
 
     def test_missing_display_name_defaults_to_unknown(self) -> None:
@@ -411,12 +401,8 @@ class TestDetermineVoteStatus:
         status = determine_vote_status(reviewer)
 
         # Then: defaults are applied
-        assert status.name == "Unknown", (
-            f"Expected name 'Unknown' as default, got '{status.name}'"
-        )
-        assert status.email == "", (
-            f"Expected email '' as default, got '{status.email}'"
-        )
+        assert status.name == "Unknown", f"Expected name 'Unknown' as default, got '{status.name}'"
+        assert status.email == "", f"Expected email '' as default, got '{status.email}'"
 
 
 def _vote_status(
@@ -487,8 +473,7 @@ class TestDeduplicateTeamContainers:
             f"Expected 1 entry after dedup (container removed), got {len(result)}"
         )
         assert result[0].reviewer_id == "alice-id", (
-            f"Expected remaining entry to be 'alice-id', "
-            f"got '{result[0].reviewer_id}'"
+            f"Expected remaining entry to be 'alice-id', got '{result[0].reviewer_id}'"
         )
 
     def test_container_for_different_team_remains(self) -> None:
@@ -534,9 +519,7 @@ class TestDeduplicateTeamContainers:
         result = deduplicate_team_containers([container])
 
         # Then: container remains — nothing to dedup against
-        assert len(result) == 1, (
-            f"Expected 1 entry (container alone), got {len(result)}"
-        )
+        assert len(result) == 1, f"Expected 1 entry (container alone), got {len(result)}"
         assert result[0].is_container is True, (
             f"Expected remaining entry to be a container, "
             f"got is_container={result[0].is_container}"
@@ -575,9 +558,7 @@ class TestDeduplicateTeamContainers:
         result = deduplicate_team_containers([alice, bob, team_1, team_2])
 
         # Then: both containers removed, both individuals remain
-        assert len(result) == 2, (
-            f"Expected 2 entries (both containers removed), got {len(result)}"
-        )
+        assert len(result) == 2, f"Expected 2 entries (both containers removed), got {len(result)}"
         result_ids = {vs.reviewer_id for vs in result}
         assert result_ids == {"alice-id", "bob-id"}, (
             f"Expected only individuals to remain, got IDs: {result_ids}"
@@ -594,9 +575,7 @@ class TestDeduplicateTeamContainers:
         result = deduplicate_team_containers([])
 
         # Then: empty in, empty out
-        assert result == [], (
-            f"Expected empty list, got {result}"
-        )
+        assert result == [], f"Expected empty list, got {result}"
 
     def test_all_individuals_no_containers_returns_same_list(self) -> None:
         """
@@ -612,9 +591,7 @@ class TestDeduplicateTeamContainers:
         result = deduplicate_team_containers([alice, bob])
 
         # Then: all individuals remain
-        assert len(result) == 2, (
-            f"Expected 2 entries (no containers to remove), got {len(result)}"
-        )
+        assert len(result) == 2, f"Expected 2 entries (no containers to remove), got {len(result)}"
         result_ids = {vs.reviewer_id for vs in result}
         assert result_ids == {"alice-id", "bob-id"}, (
             f"Expected both individuals, got IDs: {result_ids}"

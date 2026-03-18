@@ -96,9 +96,7 @@ def _parse_dev_azure_com(url: str) -> tuple[str, str, str, str]:
 
     # SSH fallback: git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
     if not repository and "ssh.dev.azure.com" in url:
-        ssh_match = re.search(
-            r"ssh\.dev\.azure\.com:v3/([^/]+)/([^/]+)/([^/]+)", url
-        )
+        ssh_match = re.search(r"ssh\.dev\.azure\.com:v3/([^/]+)/([^/]+)/([^/]+)", url)
         if ssh_match:
             org = ssh_match.group(1)
             project = ssh_match.group(2).replace("%20", " ")

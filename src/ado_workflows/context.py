@@ -136,24 +136,24 @@ class RepositoryContext:
                     service=_SERVICE,
                     field_name="repository_context",
                     reason=(
-                        "No repository context set and intelligent discovery "
-                        f"failed: {underlying}"
+                        f"No repository context set and intelligent discovery failed: {underlying}"
                     ),
                     suggestion="Call set_repository_context() first.",
                 ).to_dict()
 
             # Cached + no override → return cached
-            if (
-                working_directory is None
-                and cls._cached_info is not None
-            ):
+            if working_directory is None and cls._cached_info is not None:
                 return cls._add_metadata(cls._cached_info, "cached")
 
             # Override or cache miss → fresh discovery
             repo_info = cls._discover(target)
 
             # Update cache only for the primary context (not overrides)
-            if working_directory is None and repo_info.get("success", True) and "name" in repo_info:
+            if (
+                working_directory is None
+                and repo_info.get("success", True)
+                and "name" in repo_info
+            ):
                 cls._cached_info = repo_info
                 cls._cache_timestamp = datetime.now(tz=UTC).isoformat()
 
@@ -187,9 +187,7 @@ class RepositoryContext:
                 "current_working_directory": cls._working_directory,
                 "cache_available": cls._cached_info is not None,
                 "cache_timestamp": cls._cache_timestamp,
-                "cached_repository": (
-                    cls._cached_info.get("name") if cls._cached_info else None
-                ),
+                "cached_repository": (cls._cached_info.get("name") if cls._cached_info else None),
                 "cached_organization": (
                     cls._cached_info.get("organization") if cls._cached_info else None
                 ),

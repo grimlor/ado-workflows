@@ -101,9 +101,7 @@ def discover_repositories(search_root: str) -> list[dict[str, Any]]:
     try:
         for item in os.listdir(search_root):
             item_path = os.path.join(search_root, item)
-            if os.path.isdir(item_path) and os.path.exists(
-                os.path.join(item_path, ".git")
-            ):
+            if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, ".git")):
                 repo_info = inspect_git_repository(item_path)
                 if repo_info:
                     repositories.append(repo_info)

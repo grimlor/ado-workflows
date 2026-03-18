@@ -137,9 +137,7 @@ class TestSanitizeAdoResponse:
         result = sanitize_ado_response(text)
 
         # Then: same string returned
-        assert result == text, (
-            f"Expected string passthrough, got '{result}'"
-        )
+        assert result == text, f"Expected string passthrough, got '{result}'"
 
     def test_left_double_quote_replaced(self) -> None:
         """
@@ -157,9 +155,7 @@ class TestSanitizeAdoResponse:
         assert "\u201c" in result, (
             f"Expected UTF-8 left double quote (U+201C) in result, got '{result}'"
         )
-        assert result == "He said \u201chello", (
-            f"Expected 'He said \u201chello', got '{result}'"
-        )
+        assert result == "He said \u201chello", f"Expected 'He said \u201chello', got '{result}'"
 
     def test_right_double_quote_replaced(self) -> None:
         """
@@ -242,24 +238,12 @@ class TestSanitizeAdoResponse:
         result = sanitize_ado_response(raw)
 
         # Then: all four smart quote types replaced, normal text preserved
-        assert "\u201c" in result, (
-            f"Expected left double quote in result, got '{result}'"
-        )
-        assert "\u201d" in result, (
-            f"Expected right double quote in result, got '{result}'"
-        )
-        assert "\u2018" in result, (
-            f"Expected left single quote in result, got '{result}'"
-        )
-        assert "\u2019" in result, (
-            f"Expected right single quote in result, got '{result}'"
-        )
-        assert "Hello," in result, (
-            f"Expected normal text 'Hello,' preserved, got '{result}'"
-        )
-        assert "she said." in result, (
-            f"Expected normal text 'she said.' preserved, got '{result}'"
-        )
+        assert "\u201c" in result, f"Expected left double quote in result, got '{result}'"
+        assert "\u201d" in result, f"Expected right double quote in result, got '{result}'"
+        assert "\u2018" in result, f"Expected left single quote in result, got '{result}'"
+        assert "\u2019" in result, f"Expected right single quote in result, got '{result}'"
+        assert "Hello," in result, f"Expected normal text 'Hello,' preserved, got '{result}'"
+        assert "she said." in result, f"Expected normal text 'she said.' preserved, got '{result}'"
 
 
 class TestAnalyzePRComments:
@@ -319,8 +303,7 @@ class TestAnalyzePRComments:
             f"Expected fixed_threads 3, got {result.comment_summary.fixed_threads}"
         )
         assert result.comment_summary.active_percentage == 40.0, (
-            f"Expected active_percentage 40.0, "
-            f"got {result.comment_summary.active_percentage}"
+            f"Expected active_percentage 40.0, got {result.comment_summary.active_percentage}"
         )
 
     def test_no_threads_produces_empty_analysis(self) -> None:
@@ -374,12 +357,8 @@ class TestAnalyzePRComments:
         assert comment.file_path == "/src/payment.py", (
             f"Expected file_path '/src/payment.py', got '{comment.file_path}'"
         )
-        assert comment.line_start == 42, (
-            f"Expected line_start 42, got {comment.line_start}"
-        )
-        assert comment.line_end == 45, (
-            f"Expected line_end 45, got {comment.line_end}"
-        )
+        assert comment.line_start == 42, f"Expected line_start 42, got {comment.line_start}"
+        assert comment.line_end == 45, f"Expected line_end 45, got {comment.line_end}"
 
     def test_threads_without_file_context_have_none_fields(self) -> None:
         """
@@ -401,15 +380,9 @@ class TestAnalyzePRComments:
 
         # Then: nullable fields are None
         comment = result.active_comments[0]
-        assert comment.file_path is None, (
-            f"Expected file_path None, got '{comment.file_path}'"
-        )
-        assert comment.line_start is None, (
-            f"Expected line_start None, got {comment.line_start}"
-        )
-        assert comment.line_end is None, (
-            f"Expected line_end None, got {comment.line_end}"
-        )
+        assert comment.file_path is None, f"Expected file_path None, got '{comment.file_path}'"
+        assert comment.line_start is None, f"Expected line_start None, got {comment.line_start}"
+        assert comment.line_end is None, f"Expected line_end None, got {comment.line_end}"
 
     def test_long_comment_content_truncated_at_200_chars(self) -> None:
         """
@@ -436,12 +409,10 @@ class TestAnalyzePRComments:
             f"got {len(comment.content_preview)}"
         )
         assert comment.content_preview.endswith("..."), (
-            f"Expected content_preview to end with '...', "
-            f"got '{comment.content_preview[-10:]}'"
+            f"Expected content_preview to end with '...', got '{comment.content_preview[-10:]}'"
         )
         assert comment.full_content == long_content, (
-            f"Expected full_content to be untruncated, "
-            f"got length {len(comment.full_content)}"
+            f"Expected full_content to be untruncated, got length {len(comment.full_content)}"
         )
 
     def test_short_comment_content_not_truncated(self) -> None:
@@ -465,8 +436,7 @@ class TestAnalyzePRComments:
         # Then: no truncation
         comment = result.active_comments[0]
         assert comment.content_preview == short_content, (
-            f"Expected content_preview '{short_content}', "
-            f"got '{comment.content_preview}'"
+            f"Expected content_preview '{short_content}', got '{comment.content_preview}'"
         )
 
     def test_multiple_authors_counted_correctly(self) -> None:
@@ -498,12 +468,10 @@ class TestAnalyzePRComments:
 
         # Then: author counts correct
         assert result.comment_authors.get("Alice Smith") == 2, (
-            f"Expected Alice Smith count 2, "
-            f"got {result.comment_authors.get('Alice Smith')}"
+            f"Expected Alice Smith count 2, got {result.comment_authors.get('Alice Smith')}"
         )
         assert result.comment_authors.get("Bob Jones") == 1, (
-            f"Expected Bob Jones count 1, "
-            f"got {result.comment_authors.get('Bob Jones')}"
+            f"Expected Bob Jones count 1, got {result.comment_authors.get('Bob Jones')}"
         )
 
     def test_author_samples_populate_latest_comment_and_status(self) -> None:
@@ -533,15 +501,12 @@ class TestAnalyzePRComments:
         )
         sample = result.author_samples["Alice Smith"]
         assert sample.latest_comment == "Follow-up comment", (
-            f"Expected latest_comment 'Follow-up comment', "
-            f"got '{sample.latest_comment}'"
+            f"Expected latest_comment 'Follow-up comment', got '{sample.latest_comment}'"
         )
         assert sample.latest_status == "active", (
             f"Expected latest_status 'active', got '{sample.latest_status}'"
         )
-        assert sample.count == 2, (
-            f"Expected count 2, got {sample.count}"
-        )
+        assert sample.count == 2, f"Expected count 2, got {sample.count}"
 
     def test_deleted_comments_excluded_from_author_samples(self) -> None:
         """
@@ -554,8 +519,7 @@ class TestAnalyzePRComments:
             thread_id=1,
             status="active",
             comments=[
-                {"author": "Alice Smith", "content": "Please delete this",
-                 "is_deleted": True},
+                {"author": "Alice Smith", "content": "Please delete this", "is_deleted": True},
                 {"author": "Alice Smith", "content": "This is the real comment"},
             ],
         )
@@ -603,12 +567,15 @@ class TestAnalyzePRComments:
         """
         # Given: 2 fixed + 1 active
         threads = [
-            _make_thread(thread_id=1, status="fixed",
-                         comments=[{"author": "A", "content": "Done"}]),
-            _make_thread(thread_id=2, status="fixed",
-                         comments=[{"author": "A", "content": "Done"}]),
-            _make_thread(thread_id=3, status="active",
-                         comments=[{"author": "B", "content": "Still open"}]),
+            _make_thread(
+                thread_id=1, status="fixed", comments=[{"author": "A", "content": "Done"}]
+            ),
+            _make_thread(
+                thread_id=2, status="fixed", comments=[{"author": "A", "content": "Done"}]
+            ),
+            _make_thread(
+                thread_id=3, status="active", comments=[{"author": "B", "content": "Still open"}]
+            ),
         ]
         client = _mock_client(threads)
 
@@ -645,12 +612,10 @@ class TestAnalyzePRComments:
         # Then: line_start falls back to leftFileStart
         comment = result.active_comments[0]
         assert comment.line_start == 10, (
-            f"Expected line_start 10 from leftFileStart fallback, "
-            f"got {comment.line_start}"
+            f"Expected line_start 10 from leftFileStart fallback, got {comment.line_start}"
         )
         assert comment.line_end == 15, (
-            f"Expected line_end 15 from leftFileEnd fallback, "
-            f"got {comment.line_end}"
+            f"Expected line_end 15 from leftFileEnd fallback, got {comment.line_end}"
         )
 
     def test_sdk_call_receives_correct_parameters(self) -> None:
@@ -662,14 +627,10 @@ class TestAnalyzePRComments:
         client = _mock_client([])
 
         # When: called with specific parameters
-        analyze_pr_comments(
-            client, pr_id=42, project="MyProject", repository="MyRepo"
-        )
+        analyze_pr_comments(client, pr_id=42, project="MyProject", repository="MyRepo")
 
         # Then: SDK method called with correct arguments
-        client.git.get_threads.assert_called_once_with(
-            "MyRepo", 42, project="MyProject"
-        )
+        client.git.get_threads.assert_called_once_with("MyRepo", 42, project="MyProject")
 
 
 # ---------------------------------------------------------------------------
@@ -709,9 +670,7 @@ class TestPostComment:
         result = post_comment(client, "Repo", 42, "Great work!", "Proj")
 
         # Then: the thread ID is returned
-        assert result == 77, (
-            f"Expected thread_id=77, got {result}"
-        )
+        assert result == 77, f"Expected thread_id=77, got {result}"
 
     def test_custom_status_passed_to_sdk(self) -> None:
         """
@@ -822,9 +781,7 @@ class TestReplyToComment:
         result = reply_to_comment(client, "Repo", 42, 77, "Thanks!", "Proj")
 
         # Then: the comment ID is returned
-        assert result == 5, (
-            f"Expected comment_id=5, got {result}"
-        )
+        assert result == 5, f"Expected comment_id=5, got {result}"
 
     def test_sdk_exception_raises_actionable_error(self) -> None:
         """
@@ -834,9 +791,7 @@ class TestReplyToComment:
         """
         # Given: a client whose create_comment raises
         client = Mock()
-        client.git.create_comment.side_effect = Exception(
-            "Thread 999 not found"
-        )
+        client.git.create_comment.side_effect = Exception("Thread 999 not found")
 
         # When/Then: ActionableError is raised
         with pytest.raises(ActionableError) as exc_info:
@@ -912,15 +867,9 @@ class TestResolveComments:
         result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
 
         # Then: all threads are in resolved
-        assert result.resolved == [1, 2, 3], (
-            f"Expected resolved=[1,2,3], got {result.resolved}"
-        )
-        assert result.errors == [], (
-            f"Expected errors=[], got {result.errors}"
-        )
-        assert result.skipped == [], (
-            f"Expected skipped=[], got {result.skipped}"
-        )
+        assert result.resolved == [1, 2, 3], f"Expected resolved=[1,2,3], got {result.resolved}"
+        assert result.errors == [], f"Expected errors=[], got {result.errors}"
+        assert result.skipped == [], f"Expected skipped=[], got {result.skipped}"
 
     def test_partial_failure(self) -> None:
         """
@@ -950,21 +899,15 @@ class TestResolveComments:
         result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
 
         # Then: thread 2 is in errors, others in resolved
-        assert result.resolved == [1, 3], (
-            f"Expected resolved=[1,3], got {result.resolved}"
-        )
-        assert len(result.errors) == 1, (
-            f"Expected 1 error, got {len(result.errors)}"
-        )
+        assert result.resolved == [1, 3], f"Expected resolved=[1,3], got {result.resolved}"
+        assert len(result.errors) == 1, f"Expected 1 error, got {len(result.errors)}"
         assert isinstance(result.errors[0], ActionableError), (
             f"Expected ActionableError, got {type(result.errors[0])}"
         )
         assert result.errors[0].context == {"thread_id": 2}, (
             f"Expected context with thread_id=2, got {result.errors[0].context}"
         )
-        assert result.skipped == [], (
-            f"Expected skipped=[], got {result.skipped}"
-        )
+        assert result.skipped == [], f"Expected skipped=[], got {result.skipped}"
 
     def test_thread_already_in_target_status_is_skipped(self) -> None:
         """
@@ -1010,15 +953,9 @@ class TestResolveComments:
         result = resolve_comments(client, "Repo", 42, [], "Proj")
 
         # Then: all result lists are empty
-        assert result.resolved == [], (
-            f"Expected resolved=[], got {result.resolved}"
-        )
-        assert result.errors == [], (
-            f"Expected errors=[], got {result.errors}"
-        )
-        assert result.skipped == [], (
-            f"Expected skipped=[], got {result.skipped}"
-        )
+        assert result.resolved == [], f"Expected resolved=[], got {result.resolved}"
+        assert result.errors == [], f"Expected errors=[], got {result.errors}"
+        assert result.skipped == [], f"Expected skipped=[], got {result.skipped}"
 
     def test_custom_status_passed_to_sdk(self) -> None:
         """
@@ -1037,9 +974,7 @@ class TestResolveComments:
         client.git.update_thread.return_value = response
 
         # When: called with status="wontFix"
-        resolve_comments(
-            client, "Repo", 42, [1], "Proj", status="wontFix"
-        )
+        resolve_comments(client, "Repo", 42, [1], "Proj", status="wontFix")
 
         # Then: update_thread received the custom status
         call_args = client.git.update_thread.call_args
@@ -1070,20 +1005,11 @@ class TestResolveComments:
         result = resolve_comments(client, "Repo", 42, [1, 2, 3], "Proj")
 
         # Then: all threads in errors, none in resolved
-        assert result.resolved == [], (
-            f"Expected resolved=[], got {result.resolved}"
-        )
-        assert len(result.errors) == 3, (
-            f"Expected 3 errors, got {len(result.errors)}"
-        )
+        assert result.resolved == [], f"Expected resolved=[], got {result.resolved}"
+        assert len(result.errors) == 3, f"Expected 3 errors, got {len(result.errors)}"
         for err in result.errors:
-            assert err.context is not None, (
-                "Expected context to be set on each error"
-            )
-        error_thread_ids = [
-            e.context["thread_id"] for e in result.errors
-            if e.context is not None
-        ]
+            assert err.context is not None, "Expected context to be set on each error"
+        error_thread_ids = [e.context["thread_id"] for e in result.errors if e.context is not None]
         assert error_thread_ids == [1, 2, 3], (
             f"Expected thread_ids [1,2,3], got {error_thread_ids}"
         )

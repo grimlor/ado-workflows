@@ -42,9 +42,7 @@ def _repo_info(
         "name": name,
         "organization": organization,
         "project": project,
-        "remote_url": (
-            f"https://dev.azure.com/{organization}/{project}/_git/{name}"
-        ),
+        "remote_url": (f"https://dev.azure.com/{organization}/{project}/_git/{name}"),
         "org_url": f"https://dev.azure.com/{organization}",
         "workspace_context": {
             "is_multi_repo_workspace": False,
@@ -93,9 +91,7 @@ class TestContextSet:
         """Reset global state via the public API."""
         RepositoryContext.clear()
 
-    def test_set_with_valid_directory_caches_repo_info(
-        self, tmp_path: Path
-    ) -> None:
+    def test_set_with_valid_directory_caches_repo_info(self, tmp_path: Path) -> None:
         """
         Given a valid absolute directory containing an ADO git repo
         When set() is called
@@ -122,8 +118,7 @@ class TestContextSet:
         assert result["success"] is True, f"Expected success, got: {result}"
         assert "repository_info" in result, f"Missing repository_info: {result}"
         assert result["repository_info"]["name"] == "my-repo", (
-            f"Expected repo name 'my-repo', "
-            f"got: {result['repository_info'].get('name')}"
+            f"Expected repo name 'my-repo', got: {result['repository_info'].get('name')}"
         )
 
     def test_set_with_relative_path_returns_validation_error(self) -> None:
@@ -141,9 +136,7 @@ class TestContextSet:
             f"Expected validation error, got: {result.get('error_type')}"
         )
 
-    def test_set_with_nonexistent_directory_returns_not_found(
-        self, tmp_path: Path
-    ) -> None:
+    def test_set_with_nonexistent_directory_returns_not_found(self, tmp_path: Path) -> None:
         """
         Given an absolute path that does not exist
         When set() is called
@@ -200,8 +193,7 @@ class TestContextSet:
 
         # Then: new repo info cached
         assert result["repository_info"]["name"] == "other-repo", (
-            f"Expected other-repo, "
-            f"got: {result['repository_info'].get('name')}"
+            f"Expected other-repo, got: {result['repository_info'].get('name')}"
         )
 
     def test_set_resets_on_discovery_failure(self, tmp_path: Path) -> None:
@@ -239,9 +231,7 @@ class TestContextSet:
             f"Expected context_set=False after failed discovery, got: {status}"
         )
 
-    def test_set_uses_first_repo_when_infer_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_set_uses_first_repo_when_infer_returns_none(self, tmp_path: Path) -> None:
         """
         Given discover_repositories returns repos but infer returns None
         When set() is called
@@ -318,9 +308,7 @@ class TestContextGet:
         ):
             RepositoryContext.set(directory)
 
-    def test_get_returns_cached_info_when_context_set(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_returns_cached_info_when_context_set(self, tmp_path: Path) -> None:
         """
         Given context has been set
         When get() is called without arguments
@@ -335,20 +323,15 @@ class TestContextGet:
         result = RepositoryContext.get()
 
         # Then: cached result with metadata
-        assert result["name"] == "my-repo", (
-            f"Expected my-repo, got: {result.get('name')}"
-        )
+        assert result["name"] == "my-repo", f"Expected my-repo, got: {result.get('name')}"
         assert result.get("_context_source") == "cached", (
             f"Expected source=cached, got: {result.get('_context_source')}"
         )
         assert "_context_working_directory" in result, (
-            f"Expected _context_working_directory in cached result: "
-            f"{list(result.keys())}"
+            f"Expected _context_working_directory in cached result: {list(result.keys())}"
         )
 
-    def test_get_with_override_performs_fresh_discovery(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_with_override_performs_fresh_discovery(self, tmp_path: Path) -> None:
         """
         Given cached context exists
         When get() is called with an explicit directory
@@ -370,17 +353,12 @@ class TestContextGet:
                 return_value=_SECOND,
             ),
         ):
-            result = RepositoryContext.get(
-                working_directory="/workspace/other-repo"
-            )
+            result = RepositoryContext.get(working_directory="/workspace/other-repo")
 
         # Then: fresh result from override directory
-        assert result["name"] == "other-repo", (
-            f"Expected other-repo, got: {result.get('name')}"
-        )
+        assert result["name"] == "other-repo", f"Expected other-repo, got: {result.get('name')}"
         assert result.get("_context_source") == "fresh_discovery", (
-            f"Expected source=fresh_discovery, "
-            f"got: {result.get('_context_source')}"
+            f"Expected source=fresh_discovery, got: {result.get('_context_source')}"
         )
 
     def test_get_without_context_attempts_intelligent_discovery(
@@ -408,12 +386,10 @@ class TestContextGet:
 
         # Then: intelligent discovery result
         assert result["name"] == "my-repo", (
-            f"Expected intelligent discovery result, "
-            f"got: {result.get('name')}"
+            f"Expected intelligent discovery result, got: {result.get('name')}"
         )
         assert result.get("_context_source") == "intelligent_discovery", (
-            f"Expected source=intelligent_discovery, "
-            f"got: {result.get('_context_source')}"
+            f"Expected source=intelligent_discovery, got: {result.get('_context_source')}"
         )
 
     def test_get_without_context_returns_error_when_discovery_fails(
@@ -438,13 +414,10 @@ class TestContextGet:
         # Then: validation error with underlying cause
         assert result["success"] is False, f"Expected failure, got: {result}"
         assert "No Azure DevOps repositories" in result.get("error", ""), (
-            f"Expected discovery failure detail in error, "
-            f"got: {result.get('error')}"
+            f"Expected discovery failure detail in error, got: {result.get('error')}"
         )
 
-    def test_get_override_does_not_update_cache(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_override_does_not_update_cache(self, tmp_path: Path) -> None:
         """
         Given a cached context for one repo
         When get() is called with a different override directory
@@ -471,13 +444,10 @@ class TestContextGet:
         # Then: cache still holds original
         status = RepositoryContext.status()
         assert status["cached_repository"] == "my-repo", (
-            f"Expected cache unchanged, "
-            f"got: {status.get('cached_repository')}"
+            f"Expected cache unchanged, got: {status.get('cached_repository')}"
         )
 
-    def test_get_populates_cache_on_primary_miss(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_populates_cache_on_primary_miss(self, tmp_path: Path) -> None:
         """
         Given the working directory is set but cached_info is None
         When get() is called without arguments
@@ -508,9 +478,7 @@ class TestContextGet:
             result = RepositoryContext.get()
 
         # Then: fresh discovery result
-        assert result["name"] == "my-repo", (
-            f"Expected my-repo, got: {result.get('name')}"
-        )
+        assert result["name"] == "my-repo", f"Expected my-repo, got: {result.get('name')}"
         assert result.get("_context_source") == "fresh_discovery", (
             f"Expected fresh_discovery, got: {result.get('_context_source')}"
         )
@@ -520,8 +488,7 @@ class TestContextGet:
             f"Expected cache_available=True after miss, got: {status}"
         )
         assert status["cache_timestamp"] is not None, (
-            f"Expected cache_timestamp set, "
-            f"got: {status.get('cache_timestamp')}"
+            f"Expected cache_timestamp set, got: {status.get('cache_timestamp')}"
         )
 
     def test_get_uses_cwd_for_intelligent_discovery(self) -> None:
@@ -605,12 +572,8 @@ class TestContextClear:
         # Then: state removed
         assert result["success"] is True, f"Expected success, got: {result}"
         status = RepositoryContext.status()
-        assert status["context_set"] is False, (
-            f"Expected context_set=False, got: {status}"
-        )
-        assert status["cache_available"] is False, (
-            f"Expected cache_available=False, got: {status}"
-        )
+        assert status["context_set"] is False, f"Expected context_set=False, got: {status}"
+        assert status["cache_available"] is False, f"Expected cache_available=False, got: {status}"
 
     def test_clear_returns_previous_state(self, tmp_path: Path) -> None:
         """
@@ -628,8 +591,7 @@ class TestContextClear:
 
         # Then: previous state in result
         assert result["previous_directory"] == str(repo_dir), (
-            f"Expected previous directory '{repo_dir}', "
-            f"got: {result.get('previous_directory')}"
+            f"Expected previous directory '{repo_dir}', got: {result.get('previous_directory')}"
         )
 
     def test_clear_on_empty_state_succeeds(self) -> None:
@@ -646,8 +608,7 @@ class TestContextClear:
         # Then: success with None previous
         assert result["success"] is True, f"Expected success, got: {result}"
         assert result["previous_directory"] is None, (
-            f"Expected None previous_directory, "
-            f"got: {result.get('previous_directory')}"
+            f"Expected None previous_directory, got: {result.get('previous_directory')}"
         )
 
 
@@ -687,15 +648,10 @@ class TestContextStatus:
         result = RepositoryContext.status()
 
         # Then: empty state
-        assert result["context_set"] is False, (
-            f"Expected context_set=False, got: {result}"
-        )
-        assert result["cache_available"] is False, (
-            f"Expected cache_available=False, got: {result}"
-        )
+        assert result["context_set"] is False, f"Expected context_set=False, got: {result}"
+        assert result["cache_available"] is False, f"Expected cache_available=False, got: {result}"
         assert result["current_working_directory"] is None, (
-            f"Expected None directory, "
-            f"got: {result.get('current_working_directory')}"
+            f"Expected None directory, got: {result.get('current_working_directory')}"
         )
 
     def test_status_with_active_context(self, tmp_path: Path) -> None:
@@ -723,23 +679,16 @@ class TestContextStatus:
         result = RepositoryContext.status()
 
         # Then: active state with details
-        assert result["context_set"] is True, (
-            f"Expected context_set=True, got: {result}"
-        )
-        assert result["cache_available"] is True, (
-            f"Expected cache_available=True, got: {result}"
-        )
+        assert result["context_set"] is True, f"Expected context_set=True, got: {result}"
+        assert result["cache_available"] is True, f"Expected cache_available=True, got: {result}"
         assert result["cached_repository"] == "my-repo", (
-            f"Expected cached_repository=my-repo, "
-            f"got: {result.get('cached_repository')}"
+            f"Expected cached_repository=my-repo, got: {result.get('cached_repository')}"
         )
         assert result["cached_organization"] == "ExampleOrg", (
-            f"Expected cached_organization=ExampleOrg, "
-            f"got: {result.get('cached_organization')}"
+            f"Expected cached_organization=ExampleOrg, got: {result.get('cached_organization')}"
         )
         assert result["cache_timestamp"] is not None, (
-            f"Expected non-None timestamp, "
-            f"got: {result.get('cache_timestamp')}"
+            f"Expected non-None timestamp, got: {result.get('cache_timestamp')}"
         )
 
 
@@ -767,9 +716,7 @@ class TestContextThreadSafety:
         """Reset global state via the public API."""
         RepositoryContext.clear()
 
-    def test_concurrent_set_and_get_do_not_corrupt_state(
-        self, tmp_path: Path
-    ) -> None:
+    def test_concurrent_set_and_get_do_not_corrupt_state(self, tmp_path: Path) -> None:
         """
         Given multiple threads setting and getting context simultaneously
         When all threads complete
@@ -823,9 +770,7 @@ class TestContextThreadSafety:
                 t.join()
 
         # Then: all operations completed, final state is consistent
-        assert len(results) == num_threads, (
-            f"Expected {num_threads} results, got {len(results)}"
-        )
+        assert len(results) == num_threads, f"Expected {num_threads} results, got {len(results)}"
         final_status = RepositoryContext.status()
         assert final_status["context_set"] is True, (
             f"Expected context_set=True, got: {final_status}"
@@ -907,9 +852,7 @@ class TestContextErrorPaths:
             f"Expected error detail, got: {result.get('error')}"
         )
 
-    def test_no_repos_found_returns_structured_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_no_repos_found_returns_structured_error(self, tmp_path: Path) -> None:
         """
         Given discover_repositories returns an empty list
         When set() is called
@@ -965,16 +908,12 @@ class TestConvenienceFunctions:
         Then it delegates to RepositoryContext.set()
         """
         # Given/When: call the convenience function
-        with patch.object(
-            RepositoryContext, "set", return_value={"success": True}
-        ) as mock_set:
+        with patch.object(RepositoryContext, "set", return_value={"success": True}) as mock_set:
             result = set_repository_context("/workspace/repo")
 
         # Then: delegation verified
         mock_set.assert_called_once_with("/workspace/repo")
-        assert result["success"] is True, (
-            f"Expected delegation result, got: {result}"
-        )
+        assert result["success"] is True, f"Expected delegation result, got: {result}"
 
     def test_get_repository_context_delegates(self) -> None:
         """
@@ -982,16 +921,12 @@ class TestConvenienceFunctions:
         Then it delegates to RepositoryContext.get()
         """
         # Given/When: call the convenience function
-        with patch.object(
-            RepositoryContext, "get", return_value={"name": "r"}
-        ) as mock_get:
+        with patch.object(RepositoryContext, "get", return_value={"name": "r"}) as mock_get:
             result = get_repository_context("/override")
 
         # Then: delegation verified
         mock_get.assert_called_once_with("/override")
-        assert result["name"] == "r", (
-            f"Expected delegation result, got: {result}"
-        )
+        assert result["name"] == "r", f"Expected delegation result, got: {result}"
 
     def test_get_context_status_delegates(self) -> None:
         """
@@ -1000,16 +935,12 @@ class TestConvenienceFunctions:
         """
         # Given/When: call the convenience function
         expected: dict[str, Any] = {"context_set": False}
-        with patch.object(
-            RepositoryContext, "status", return_value=expected
-        ) as mock_status:
+        with patch.object(RepositoryContext, "status", return_value=expected) as mock_status:
             result = get_context_status()
 
         # Then: delegation verified
         mock_status.assert_called_once()
-        assert result == expected, (
-            f"Expected delegation result, got: {result}"
-        )
+        assert result == expected, f"Expected delegation result, got: {result}"
 
     def test_clear_repository_context_delegates(self) -> None:
         """
@@ -1018,13 +949,9 @@ class TestConvenienceFunctions:
         """
         # Given/When: call the convenience function
         expected: dict[str, Any] = {"success": True, "message": "cleared"}
-        with patch.object(
-            RepositoryContext, "clear", return_value=expected
-        ) as mock_clear:
+        with patch.object(RepositoryContext, "clear", return_value=expected) as mock_clear:
             result = clear_repository_context()
 
         # Then: delegation verified
         mock_clear.assert_called_once()
-        assert result == expected, (
-            f"Expected delegation result, got: {result}"
-        )
+        assert result == expected, f"Expected delegation result, got: {result}"

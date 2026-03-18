@@ -75,7 +75,13 @@ def _make_vote_thread(
     """
     thread = Mock()
     thread.published_date = published_date or datetime(
-        2025, 6, 15, 10, 0, 0, tzinfo=UTC,
+        2025,
+        6,
+        15,
+        10,
+        0,
+        0,
+        tzinfo=UTC,
     )
     thread.properties = {
         "CodeReviewVotedByIdentity": {
@@ -210,9 +216,7 @@ class TestFetchRequiredApprovals:
         result = fetch_required_approvals(client, "MyProject", 42)
 
         # Then: the configured count is returned
-        assert result == 3, (
-            f"Expected 3 from policy, got {result}"
-        )
+        assert result == 3, f"Expected 3 from policy, got {result}"
 
     def test_no_reviewer_policy_returns_default(self) -> None:
         """
@@ -228,9 +232,7 @@ class TestFetchRequiredApprovals:
         result = fetch_required_approvals(client, "MyProject", 42)
 
         # Then: the default is returned
-        assert result == 2, (
-            f"Expected default 2 when no matching policy, got {result}"
-        )
+        assert result == 2, f"Expected default 2 when no matching policy, got {result}"
 
     def test_empty_evaluations_returns_default(self) -> None:
         """
@@ -245,9 +247,7 @@ class TestFetchRequiredApprovals:
         result = fetch_required_approvals(client, "MyProject", 42)
 
         # Then: the default is returned
-        assert result == 2, (
-            f"Expected default 2 for empty evaluations, got {result}"
-        )
+        assert result == 2, f"Expected default 2 for empty evaluations, got {result}"
 
     def test_api_exception_raises_actionable_error(self) -> None:
         """
@@ -278,13 +278,14 @@ class TestFetchRequiredApprovals:
 
         # When: called with default_required_approvals=4
         result = fetch_required_approvals(
-            client, "MyProject", 42, default_required_approvals=4,
+            client,
+            "MyProject",
+            42,
+            default_required_approvals=4,
         )
 
         # Then: the custom default is returned
-        assert result == 4, (
-            f"Expected custom default 4, got {result}"
-        )
+        assert result == 4, f"Expected custom default 4, got {result}"
 
     def test_multiple_evaluations_extracts_matching_one(self) -> None:
         """
@@ -301,9 +302,7 @@ class TestFetchRequiredApprovals:
         result = fetch_required_approvals(client, "MyProject", 42)
 
         # Then: the value from the matching policy is returned
-        assert result == 5, (
-            f"Expected 5 from matching policy among multiple, got {result}"
-        )
+        assert result == 5, f"Expected 5 from matching policy among multiple, got {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -387,9 +386,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: empty dict
-        assert result == {}, (
-            f"Expected empty dict for no threads, got {result}"
-        )
+        assert result == {}, f"Expected empty dict for no threads, got {result}"
 
     def test_malformed_properties_skipped(self) -> None:
         """
@@ -411,9 +408,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: only the valid thread is in the result
-        assert result == {"guid-ok": ts_valid}, (
-            f"Expected only guid-ok, got {result}"
-        )
+        assert result == {"guid-ok": ts_valid}, f"Expected only guid-ok, got {result}"
 
     def test_multiple_votes_same_reviewer_keeps_latest(self) -> None:
         """
@@ -432,9 +427,8 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: the latest timestamp is kept
-        assert result == {"guid-x": ts_new}, (
-            f"Expected latest timestamp {ts_new}, got {result}"
-        )
+        assert result == {"guid-x": ts_new}, f"Expected latest timestamp {ts_new}, got {result}"
+
     def test_empty_value_in_vote_property_skipped(self) -> None:
         """
         Given a thread whose CodeReviewVotedByIdentity has an empty $value
@@ -453,9 +447,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: empty dict (thread was skipped)
-        assert result == {}, (
-            f"Expected empty dict for empty $value, got {result}"
-        )
+        assert result == {}, f"Expected empty dict for empty $value, got {result}"
 
     def test_none_published_date_skipped(self) -> None:
         """
@@ -479,9 +471,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: empty dict (thread was skipped)
-        assert result == {}, (
-            f"Expected empty dict for None published_date, got {result}"
-        )
+        assert result == {}, f"Expected empty dict for None published_date, got {result}"
 
     def test_identity_ref_not_in_identities_skipped(self) -> None:
         """
@@ -505,9 +495,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: empty dict (identity ref not resolved)
-        assert result == {}, (
-            f"Expected empty dict when identity ref not found, got {result}"
-        )
+        assert result == {}, f"Expected empty dict when identity ref not found, got {result}"
 
     def test_identity_with_empty_id_skipped(self) -> None:
         """
@@ -531,9 +519,7 @@ class TestFetchVoteTimestamps:
         result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
 
         # Then: empty dict (identity has no GUID)
-        assert result == {}, (
-            f"Expected empty dict for empty identity id, got {result}"
-        )
+        assert result == {}, f"Expected empty dict for empty identity id, got {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -581,10 +567,14 @@ class TestGetReviewStatus:
         # Given: 2 approved reviewers, policy requires 2
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
             _make_reviewer(
-                display_name="Bob", reviewer_id="guid-b", vote=10,
+                display_name="Bob",
+                reviewer_id="guid-b",
+                vote=10,
             ),
         ]
         policy = _make_policy_evaluation(min_approver_count=2)
@@ -592,7 +582,8 @@ class TestGetReviewStatus:
             author_date=datetime(2025, 6, 10, tzinfo=UTC),
         )
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             policy_evaluations=[policy],
         )
 
@@ -616,7 +607,9 @@ class TestGetReviewStatus:
         # Given: 1 approved reviewer, policy requires 2
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         policy = _make_policy_evaluation(min_approver_count=2)
@@ -624,7 +617,8 @@ class TestGetReviewStatus:
             author_date=datetime(2025, 6, 10, tzinfo=UTC),
         )
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             policy_evaluations=[policy],
         )
 
@@ -633,8 +627,7 @@ class TestGetReviewStatus:
 
         # Then: needs 1 more approval
         assert result.approval_status.needs_approvals_count == 1, (
-            f"Expected needs_approvals_count=1, got "
-            f"{result.approval_status.needs_approvals_count}"
+            f"Expected needs_approvals_count=1, got {result.approval_status.needs_approvals_count}"
         )
         assert "Needs 1 approval(s)" in result.summary, (
             f"Expected 'Needs 1 approval(s)' in summary, got: {result.summary}"
@@ -649,12 +642,15 @@ class TestGetReviewStatus:
         # Given: one rejecting reviewer
         reviewers = [
             _make_reviewer(
-                display_name="Carol", reviewer_id="guid-c", vote=-10,
+                display_name="Carol",
+                reviewer_id="guid-c",
+                vote=-10,
             ),
         ]
         policy = _make_policy_evaluation(min_approver_count=2)
         client = _mock_full_client(
-            reviewers=reviewers, policy_evaluations=[policy],
+            reviewers=reviewers,
+            policy_evaluations=[policy],
         )
 
         # When: get_review_status is called
@@ -678,7 +674,9 @@ class TestGetReviewStatus:
         # from PR properties (OneReviewPolicyPilot tier-1 staleness)
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         commit = _make_commit(
@@ -693,7 +691,8 @@ class TestGetReviewStatus:
         }
         policy = _make_policy_evaluation(min_approver_count=1)
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             pr_properties=pr_properties,
             policy_evaluations=[policy],
         )
@@ -720,7 +719,9 @@ class TestGetReviewStatus:
         # Given: reviewer voted before the latest commit (tier-2 staleness)
         reviewers = [
             _make_reviewer(
-                display_name="Bob", reviewer_id="guid-b", vote=10,
+                display_name="Bob",
+                reviewer_id="guid-b",
+                vote=10,
             ),
         ]
         # Latest commit is June 20; Bob voted June 10
@@ -733,7 +734,8 @@ class TestGetReviewStatus:
         )
         policy = _make_policy_evaluation(min_approver_count=1)
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             vote_threads=[vote_thread],
             policy_evaluations=[policy],
         )
@@ -761,12 +763,15 @@ class TestGetReviewStatus:
         # Given: one reviewer with vote=-5 (waiting for author)
         reviewers = [
             _make_reviewer(
-                display_name="Dave", reviewer_id="guid-d", vote=-5,
+                display_name="Dave",
+                reviewer_id="guid-d",
+                vote=-5,
             ),
         ]
         policy = _make_policy_evaluation(min_approver_count=2)
         client = _mock_full_client(
-            reviewers=reviewers, policy_evaluations=[policy],
+            reviewers=reviewers,
+            policy_evaluations=[policy],
         )
 
         # When: get_review_status is called
@@ -774,8 +779,7 @@ class TestGetReviewStatus:
 
         # Then: waiting_reviewers populated
         assert len(result.approval_status.waiting_reviewers) == 1, (
-            f"Expected 1 waiting reviewer, got "
-            f"{len(result.approval_status.waiting_reviewers)}"
+            f"Expected 1 waiting reviewer, got {len(result.approval_status.waiting_reviewers)}"
         )
         assert "Waiting for author" in result.summary, (
             f"Expected 'Waiting for author' in summary, got: {result.summary}"
@@ -790,7 +794,8 @@ class TestGetReviewStatus:
         # Given: no reviewers, policy requires 2
         policy = _make_policy_evaluation(min_approver_count=2)
         client = _mock_full_client(
-            reviewers=[], policy_evaluations=[policy],
+            reviewers=[],
+            policy_evaluations=[policy],
         )
 
         # When: get_review_status is called
@@ -798,8 +803,7 @@ class TestGetReviewStatus:
 
         # Then: needs all approvals
         assert result.approval_status.needs_approvals_count == 2, (
-            f"Expected needs_approvals_count=2, got "
-            f"{result.approval_status.needs_approvals_count}"
+            f"Expected needs_approvals_count=2, got {result.approval_status.needs_approvals_count}"
         )
         assert result.approval_status.is_approved is False, (
             "Expected is_approved=False with no reviewers"
@@ -814,11 +818,15 @@ class TestGetReviewStatus:
         # Given: individual Alice (approved, votedFor team-1) + container team-1 (approved)
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
                 voted_for=[Mock(id="team-1")],
             ),
             _make_reviewer(
-                display_name="Team Alpha", reviewer_id="team-1", vote=10,
+                display_name="Team Alpha",
+                reviewer_id="team-1",
+                vote=10,
                 is_container=True,
             ),
         ]
@@ -827,7 +835,8 @@ class TestGetReviewStatus:
             author_date=datetime(2025, 6, 10, tzinfo=UTC),
         )
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             policy_evaluations=[policy],
         )
 
@@ -873,12 +882,15 @@ class TestGetReviewStatus:
         # Given: no commits
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         policy = _make_policy_evaluation(min_approver_count=1)
         client = _mock_full_client(
-            reviewers=reviewers, commits=[],
+            reviewers=reviewers,
+            commits=[],
             policy_evaluations=[policy],
         )
 
@@ -900,7 +912,9 @@ class TestGetReviewStatus:
         creation = datetime(2025, 5, 1, tzinfo=UTC)
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         commit = _make_commit(
@@ -921,9 +935,7 @@ class TestGetReviewStatus:
         result = get_review_status(client, 42, "MyProject", "MyRepo")
 
         # Then: all metadata fields are correct
-        assert result.pr_id == 42, (
-            f"Expected pr_id=42, got {result.pr_id}"
-        )
+        assert result.pr_id == 42, f"Expected pr_id=42, got {result.pr_id}"
         assert result.title == "Add widget tests", (
             f"Expected title='Add widget tests', got {result.title!r}"
         )
@@ -933,9 +945,7 @@ class TestGetReviewStatus:
         assert result.url == "https://dev.azure.com/Org/Proj/_git/Repo/pullrequest/42", (
             f"Expected correct URL, got {result.url!r}"
         )
-        assert result.days_open >= 0, (
-            f"Expected days_open >= 0, got {result.days_open}"
-        )
+        assert result.days_open >= 0, f"Expected days_open >= 0, got {result.days_open}"
 
     def test_properties_fetch_failure_skips_staleness(self) -> None:
         """
@@ -946,7 +956,9 @@ class TestGetReviewStatus:
         # Given: an approved reviewer, but properties fetch fails
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         commit = _make_commit(
@@ -954,7 +966,8 @@ class TestGetReviewStatus:
         )
         policy = _make_policy_evaluation(min_approver_count=1)
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             policy_evaluations=[policy],
         )
         # Simulate properties fetch failure
@@ -990,14 +1003,17 @@ class TestGetReviewStatus:
         # Given: a PR with 1 approved reviewer, but policy API fails
         reviewers = [
             _make_reviewer(
-                display_name="Alice", reviewer_id="guid-a", vote=10,
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
             ),
         ]
         commit = _make_commit(
             author_date=datetime(2025, 6, 10, tzinfo=UTC),
         )
         client = _mock_full_client(
-            reviewers=reviewers, commits=[commit],
+            reviewers=reviewers,
+            commits=[commit],
             policy_evaluations=[],  # not used — will fail first
         )
         # Simulate policy API failure
@@ -1013,8 +1029,7 @@ class TestGetReviewStatus:
             "Expected not approved when using default of 2 with only 1 approver"
         )
         assert result.approval_status.needs_approvals_count == 1, (
-            f"Expected needs_approvals_count=1, got "
-            f"{result.approval_status.needs_approvals_count}"
+            f"Expected needs_approvals_count=1, got {result.approval_status.needs_approvals_count}"
         )
         # And: the failure is surfaced as a warning
         assert len(result.warnings) == 1, (
