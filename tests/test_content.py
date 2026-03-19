@@ -281,11 +281,15 @@ class TestGetChangedFileContents:
             f"Expected 1 successful FileContent, got {len(result.files)}"
         )
         assert len(result.failures) == 1, f"Expected 1 failure entry, got {len(result.failures)}"
-        assert result.failures[0]["path"] == "src/bad.py", (
-            f"Expected failed path='src/bad.py', got {result.failures[0].get('path')!r}"
+        failure = result.failures[0]
+        assert failure.context is not None, (
+            f"Expected context on failure, got None"
         )
-        assert "File not found" in result.failures[0]["error"], (
-            f"Expected error to contain 'File not found', got {result.failures[0].get('error')!r}"
+        assert failure.context["path"] == "src/bad.py", (
+            f"Expected failed path='src/bad.py', got {failure.context.get('path')!r}"
+        )
+        assert "File not found" in failure.error, (
+            f"Expected error to contain 'File not found', got {failure.error!r}"
         )
 
     def test_no_changed_files_returns_empty_list(self) -> None:

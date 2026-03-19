@@ -298,11 +298,12 @@ class ContentResult:
     """Result of a batch file content fetch.
 
     Follows partial-success pattern: successfully fetched files in
-    ``files``, failed fetches in ``failures`` with path and error detail.
+    ``files``, failed fetches in ``failures`` as :class:`ActionableError`
+    instances with ``context={"path": path}``.
     """
 
     files: list[FileContent]
-    failures: list[dict[str, str]]  # {path, error}
+    failures: list[ActionableError]
 
 
 @dataclass(frozen=True)
@@ -320,9 +321,11 @@ class PostingResult:
     """Result of a batch comment posting operation.
 
     Follows partial-success pattern (same as :class:`ResolveResult`).
+    Failures are :class:`ActionableError` instances with
+    ``context={"index": i, "content_preview": ...}``.
     """
 
     posted: list[int]  # thread IDs of successfully posted comments
-    failures: list[dict[str, object]]  # {index, error, content_preview}
+    failures: list[ActionableError]
     skipped: list[int]  # indices skipped (e.g., dry_run)
     dry_run: bool

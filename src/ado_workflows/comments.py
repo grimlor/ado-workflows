@@ -342,7 +342,7 @@ def post_comments(
             iter_ctx = get_latest_iteration_context(client, repository, pr_id, project)
 
     posted: list[int] = []
-    failures: list[dict[str, object]] = []
+    failures: list[ActionableError] = []
 
     for i, comment in enumerate(comments):
         try:
@@ -359,13 +359,20 @@ def post_comments(
             )
             posted.append(thread_id)
         except Exception as exc:
-            failures.append(
-                {
-                    "index": i,
-                    "error": str(exc),
-                    "content_preview": comment.content[:80],
-                }
+            err = ActionableError.internal(
+                service="ado-workflows",
+                operation="post_comment",
+                raw_error=str(exc),
+                suggestion=(
+                    f"Comment {i} failed to post. "
+                    "Check content, file path, and line number."
+                ),
             )
+            err.context = {
+                "index": i,
+                "content_preview": comment.content[:80],
+            }
+            failures.append(err)
 
     return PostingResult(
         posted=posted,

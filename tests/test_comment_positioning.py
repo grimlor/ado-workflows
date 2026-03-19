@@ -439,8 +439,12 @@ class TestBatchPostComments:
         assert len(result.failures) == 1, (
             f"Expected 1 failure, got {len(result.failures)}: {result.failures}"
         )
-        assert result.failures[0]["index"] == 1, (
-            f"Expected failure at index 1, got index {result.failures[0].get('index')}"
+        failure = result.failures[0]
+        assert failure.context is not None, (
+            f"Expected context on failure, got None"
+        )
+        assert failure.context["index"] == 1, (
+            f"Expected failure at index 1, got index {failure.context.get('index')}"
         )
 
     def test_dry_run_validates_without_posting(self) -> None:

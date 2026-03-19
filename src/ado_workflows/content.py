@@ -146,13 +146,20 @@ def get_changed_file_contents(
 
     # Fetch each file with partial-success
     files: list[FileContent] = []
-    failures: list[dict[str, str]] = []
+    failures: list[ActionableError] = []
 
     for path in file_paths:
         try:
             fc = get_file_content(client, repository, path, project, version=branch)
             files.append(fc)
         except Exception as exc:
-            failures.append({"path": path, "error": str(exc)})
+            err = ActionableError.internal(
+                service="ado-workflows",
+                operation="get_file_content",
+                raw_error=str(exc),
+                suggestion=f"Failed to fetch '{path}'. Verify the file exists in the PR branch.",
+            )
+            err.context = {"path": path}
+            failures.append(err)
 
     return ContentResult(files=files, failures=failures)
