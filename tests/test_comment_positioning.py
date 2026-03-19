@@ -441,7 +441,7 @@ class TestBatchPostComments:
         )
         failure = result.failures[0]
         assert failure.context is not None, (
-            f"Expected context on failure, got None"
+            "Expected context on failure, got None"
         )
         assert failure.context["index"] == 1, (
             f"Expected failure at index 1, got index {failure.context.get('index')}"
