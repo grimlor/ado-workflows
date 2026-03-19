@@ -282,9 +282,7 @@ class TestGetChangedFileContents:
         )
         assert len(result.failures) == 1, f"Expected 1 failure entry, got {len(result.failures)}"
         failure = result.failures[0]
-        assert failure.context is not None, (
-            "Expected context on failure, got None"
-        )
+        assert failure.context is not None, "Expected context on failure, got None"
         assert failure.context["path"] == "src/bad.py", (
             f"Expected failed path='src/bad.py', got {failure.context.get('path')!r}"
         )

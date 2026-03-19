@@ -364,8 +364,7 @@ def post_comments(
                 operation="post_comment",
                 raw_error=str(exc),
                 suggestion=(
-                    f"Comment {i} failed to post. "
-                    "Check content, file path, and line number."
+                    f"Comment {i} failed to post. Check content, file path, and line number."
                 ),
             )
             err.context = {
