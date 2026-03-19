@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.2 (2026-03-19)
+
+### Bug Fixes
+
+- **models**: Reset version for re-release
+  ([`1a3484d`](https://github.com/grimlor/ado-workflows/commit/1a3484db1a0f513fd8238448e7f89c05cc4ed704))
+
+
 ## v0.2.1 (2026-03-19)
 
 ### Bug Fixes
