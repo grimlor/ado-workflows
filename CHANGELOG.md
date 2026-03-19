@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.1 (2026-03-19)
+
+### Bug Fixes
+
+- **models**: Use ActionableError for PostingResult and ContentResult failures
+  ([`7702ead`](https://github.com/grimlor/ado-workflows/commit/7702eadaee02bdfb061075a226643008fa8f6226))
+
+
 ## v0.2.0 (2026-03-19)
 
 ### Bug Fixes
