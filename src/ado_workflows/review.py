@@ -1,4 +1,5 @@
-"""PR review helpers and orchestrator.
+"""
+PR review helpers and orchestrator.
 
 Provides :func:`fetch_required_approvals` (policy-based minimum reviewer
 count), :func:`fetch_vote_timestamps` (undocumented thread-property
@@ -42,7 +43,8 @@ def fetch_required_approvals(
     *,
     default_required_approvals: int = 2,
 ) -> int:
-    """Fetch the minimum required approvals from branch policy evaluations.
+    """
+    Fetch the minimum required approvals from branch policy evaluations.
 
     Uses ``PolicyClient.get_policy_evaluations()`` with the PR artifact ID.
     Looks for a *Minimum number of reviewers* policy type and extracts
@@ -63,6 +65,7 @@ def fetch_required_approvals(
     Raises:
         ActionableError: When the policy API call fails.  The caller
             decides whether to use the default and surface a warning.
+
     """
     artifact_id = f"vstfs:///CodeReview/CodeReviewId/{project}/{pr_id}"
 
@@ -98,7 +101,8 @@ def fetch_vote_timestamps(
     pr_id: int,
     project: str,
 ) -> dict[str, datetime]:
-    """Extract per-reviewer vote timestamps from PR thread properties.
+    """
+    Extract per-reviewer vote timestamps from PR thread properties.
 
     Scans threads for the undocumented ``CodeReviewVotedByIdentity``
     property to correlate reviewer GUIDs with when they voted.  The
@@ -123,6 +127,7 @@ def fetch_vote_timestamps(
 
     Returns:
         Mapping of ``{reviewer_guid: vote_datetime}``.
+
     """
     threads = client.git.get_threads(repository, pr_id, project=project)
 
@@ -171,7 +176,8 @@ def get_review_status(
     *,
     default_required_approvals: int = 2,
 ) -> ReviewStatus:
-    """Compute the full review status for a pull request.
+    """
+    Compute the full review status for a pull request.
 
     Orchestrates:
 
@@ -200,6 +206,7 @@ def get_review_status(
     Raises:
         ActionableError: When the PR cannot be fetched (not found,
             authentication failure, permission error).
+
     """
     # Step 1 — Fetch PR details
     try:
@@ -343,7 +350,8 @@ def analyze_pending_reviews(
     creator_filter: str | None = None,
     default_required_approvals: int = 2,
 ) -> PendingReviewResult:
-    """List active PRs that still need reviewer attention.
+    """
+    List active PRs that still need reviewer attention.
 
     Fetches active non-draft PRs, applies age and creator filters,
     then enriches each PR with staleness detection, team-container
@@ -366,6 +374,7 @@ def analyze_pending_reviews(
 
     Raises:
         ActionableError: When the PR listing API call fails.
+
     """
     # Step 1 — Fetch active PRs
     criteria = GitPullRequestSearchCriteria(status="active")
@@ -443,7 +452,8 @@ def _enrich_pr(
     default_required_approvals: int,
     now: datetime,
 ) -> PendingPR | None:
-    """Enrich a single PR with vote classification and approval counts.
+    """
+    Enrich a single PR with vote classification and approval counts.
 
     Returns ``None`` if the PR is fully approved and needs no attention.
     """

@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.discovery — git repository discovery primitives.
+"""
+BDD tests for ado_workflows.discovery — git repository discovery primitives.
 
 Covers:
     TestInspectGitRepository — single-repo extraction, non-ADO repos,

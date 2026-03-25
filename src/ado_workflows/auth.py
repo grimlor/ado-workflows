@@ -1,4 +1,5 @@
-"""Azure DevOps authentication — DefaultAzureCredential → Connection bridge.
+"""
+Azure DevOps authentication — DefaultAzureCredential → Connection bridge.
 
 Bridges azure-identity's ``DefaultAzureCredential`` into the azure-devops SDK's
 msrest-based auth layer.  ``ConnectionFactory`` handles per-org connection caching
@@ -35,7 +36,8 @@ _TOKEN_REFRESH_BUFFER_SECONDS: int = 300  # refresh 5 min before expiry
 
 
 class ConnectionFactory:
-    """Creates and caches Azure DevOps SDK connections per organization URL.
+    """
+    Creates and caches Azure DevOps SDK connections per organization URL.
 
     Bridges ``azure-identity``'s :class:`DefaultAzureCredential` into the
     azure-devops SDK's msrest-based auth layer, handling token refresh and
@@ -46,15 +48,18 @@ class ConnectionFactory:
     credential:
         Optional :class:`TokenCredential` for dependency injection / testing.
         Defaults to :class:`DefaultAzureCredential` when *None*.
+
     """
 
     def __init__(self, credential: TokenCredential | None = None) -> None:
+        """Initialize with an optional credential; defaults to DefaultAzureCredential."""
         self._credential: TokenCredential = credential or DefaultAzureCredential()
         self._connections: dict[str, Connection] = {}
         self._token_expiry: dict[str, float] = {}
 
     def get_connection(self, org_url: str) -> Connection:
-        """Get or create a cached connection for *org_url*.
+        """
+        Get or create a cached connection for *org_url*.
 
         Returns a cached :class:`Connection` if the token is still valid
         (more than 5 minutes until expiry).  Otherwise acquires a fresh
@@ -94,7 +99,8 @@ def _normalize_org_url(org_url: str) -> str:
 
 
 def get_current_user(client: AdoClient) -> UserIdentity:
-    """Return the identity of the authenticated user.
+    """
+    Return the identity of the authenticated user.
 
     Uses :class:`LocationClient`'s ``get_connection_data()`` to resolve
     the authenticated user from the active connection.
@@ -108,6 +114,7 @@ def get_current_user(client: AdoClient) -> UserIdentity:
 
     Raises:
         ActionableError: When credentials are invalid or the call fails.
+
     """
     try:
         conn_data = client.location.get_connection_data()

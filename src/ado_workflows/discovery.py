@@ -1,4 +1,5 @@
-"""Layer 1 — Git repository discovery primitives for Azure DevOps.
+"""
+Layer 1 — Git repository discovery primitives for Azure DevOps.
 
 Pure functions (except for subprocess calls to ``git``), no state, no SDK
 dependency.  Designed for single- and multi-repo workspaces.
@@ -14,7 +15,8 @@ from ado_workflows.parsing import parse_ado_url
 
 
 def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
-    """Extract Azure DevOps metadata from a local git repository.
+    """
+    Extract Azure DevOps metadata from a local git repository.
 
     Runs ``git config --get remote.origin.url`` and parses the result.
 
@@ -25,6 +27,7 @@ def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
         A dict with keys ``path``, ``name``, ``organization``, ``project``,
         ``remote_url``, ``org_url``, and ``workspace_context`` — or ``None``
         if the directory is not a valid Azure DevOps git repo.
+
     """
     try:
         result = subprocess.run(
@@ -77,7 +80,8 @@ def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
 
 
 def discover_repositories(search_root: str) -> list[dict[str, Any]]:
-    """Find all Azure DevOps git repositories under *search_root*.
+    """
+    Find all Azure DevOps git repositories under *search_root*.
 
     If *search_root* itself is a git repository, returns a single-element
     list.  Otherwise scans its immediate children for ``.git`` folders.
@@ -87,6 +91,7 @@ def discover_repositories(search_root: str) -> list[dict[str, Any]]:
 
     Returns:
         A (possibly empty) list of repository info dicts.
+
     """
     repositories: list[dict[str, Any]] = []
 
@@ -115,7 +120,8 @@ def infer_target_repository(
     repositories: list[dict[str, Any]],
     working_directory: str | None = None,
 ) -> dict[str, Any] | None:
-    """Select the most likely target repository from a list.
+    """
+    Select the most likely target repository from a list.
 
     Selection strategy (first match wins):
 
@@ -132,6 +138,7 @@ def infer_target_repository(
 
     Returns:
         The best-guess repository, or ``None`` when the choice is ambiguous.
+
     """
     if not repositories:
         return None

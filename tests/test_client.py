@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.client — AdoClient typed SDK accessors.
+"""
+BDD tests for ado_workflows.client — AdoClient typed SDK accessors.
 
 Covers:
     TestAdoClientAccess — typed property access to Git, Core, Work Item, Policy clients

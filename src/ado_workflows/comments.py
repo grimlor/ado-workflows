@@ -1,4 +1,5 @@
-"""Comment analysis, response sanitization, and write operations for Azure DevOps PRs.
+"""
+Comment analysis, response sanitization, and write operations for Azure DevOps PRs.
 
 Provides :func:`sanitize_ado_response` (pure utility for Windows-1252
 smart-quote fix), :func:`analyze_pr_comments` (SDK-based thread
@@ -40,7 +41,8 @@ from azure.devops.v7_1.git.models import (
 
 
 def sanitize_ado_response(raw_data: bytes | str) -> str:
-    """Fix Windows-1252 smart-quote corruption in ADO responses.
+    """
+    Fix Windows-1252 smart-quote corruption in ADO responses.
 
     Azure DevOps REST API sometimes returns Windows-1252 smart quotes
     (0x91-0x94) which are invalid UTF-8.  This function replaces those
@@ -53,6 +55,7 @@ def sanitize_ado_response(raw_data: bytes | str) -> str:
 
     Returns:
         A properly decoded UTF-8 string.
+
     """
     if isinstance(raw_data, str):
         return raw_data
@@ -78,7 +81,8 @@ def analyze_pr_comments(
     project: str,
     repository: str,
 ) -> CommentAnalysis:
-    """Analyze all comment threads on a pull request.
+    """
+    Analyze all comment threads on a pull request.
 
     Fetches threads via ``client.git.get_threads()``, categorizes by
     status, extracts author statistics, and identifies active (unresolved)
@@ -94,6 +98,7 @@ def analyze_pr_comments(
     Returns:
         A :class:`~models.CommentAnalysis` with thread statistics,
         author breakdowns, and active comments.
+
     """
     threads = client.git.get_threads(repository, pr_id, project=project)
 
@@ -199,7 +204,8 @@ def post_comment(
     line_number: int | None = None,
     iteration_context: IterationContext | None = None,
 ) -> int:
-    """Create a new comment thread on a pull request.
+    """
+    Create a new comment thread on a pull request.
 
     When *file_path* and *line_number* are provided, the comment is anchored
     to that line in the PR diff.  If *iteration_context* is also provided,
@@ -224,6 +230,7 @@ def post_comment(
     Raises:
         ActionableError: When *content* is empty/whitespace, when
             *file_path*/*line_number* are inconsistent, or when the SDK fails.
+
     """
     if not content or not content.strip():
         raise ActionableError.validation(
@@ -300,7 +307,8 @@ def post_comments(
     *,
     dry_run: bool = False,
 ) -> PostingResult:
-    """Batch-post comment threads with per-comment file/line positioning.
+    """
+    Batch-post comment threads with per-comment file/line positioning.
 
     Each :class:`~models.CommentPayload` carries its own content, file_path,
     and line_number.  Iteration context is resolved once and shared across
@@ -322,6 +330,7 @@ def post_comments(
 
     Returns:
         :class:`~models.PostingResult` with successes, failures, and skipped.
+
     """
     if not comments:
         return PostingResult(posted=[], failures=[], skipped=[], dry_run=dry_run)
@@ -389,7 +398,8 @@ def reply_to_comment(
     content: str,
     project: str,
 ) -> int:
-    """Add a reply to an existing comment thread.
+    """
+    Add a reply to an existing comment thread.
 
     Args:
         client: An authenticated :class:`~client.AdoClient`.
@@ -404,6 +414,7 @@ def reply_to_comment(
 
     Raises:
         ActionableError: When *content* is empty/whitespace or the SDK fails.
+
     """
     if not content or not content.strip():
         raise ActionableError.validation(
@@ -441,7 +452,8 @@ def resolve_comments(
     *,
     status: str = "fixed",
 ) -> ResolveResult:
-    """Batch-resolve comment threads with partial-success reporting.
+    """
+    Batch-resolve comment threads with partial-success reporting.
 
     Iterates *thread_ids* and calls ``client.git.update_thread()`` for
     each.  Threads already in the target status are skipped.  Individual
@@ -459,6 +471,7 @@ def resolve_comments(
     Returns:
         A :class:`~models.ResolveResult` partitioning threads into
         *resolved*, *errors*, and *skipped*.
+
     """
     resolved: list[int] = []
     errors: list[ActionableError] = []

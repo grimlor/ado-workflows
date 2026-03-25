@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.review.analyze_pending_reviews — pending review analysis.
+"""
+BDD tests for ado_workflows.review.analyze_pending_reviews — pending review analysis.
 
 Covers:
 - TestAnalyzePendingReviewsOrchestration: core filtering, enrichment, sorting
@@ -121,7 +122,8 @@ def _mock_client(
     threads_per_pr: dict[int, list[Mock]] | None = None,
     policy_evaluations: list[Mock] | None = None,
 ) -> Mock:
-    """Build a fully-wired mock AdoClient for analyze_pending_reviews.
+    """
+    Build a fully-wired mock AdoClient for analyze_pending_reviews.
 
     Configures git.get_pull_requests, git.get_pull_request_commits (per PR),
     git.get_pull_request_properties (per PR), git.get_threads (per PR),

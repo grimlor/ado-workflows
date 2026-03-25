@@ -1,4 +1,5 @@
-"""PR iteration tracking and change context resolution.
+"""
+PR iteration tracking and change context resolution.
 
 Provides iteration metadata and per-file change tracking IDs needed for
 anchoring comment threads to the correct PR iteration.
@@ -27,10 +28,12 @@ def get_pr_iterations(
     pr_id: int,
     project: str,
 ) -> list[IterationInfo]:
-    """Return all iterations for a PR, ordered by creation date.
+    """
+    Return all iterations for a PR, ordered by creation date.
 
     Raises:
         ActionableError: When the SDK call fails (connection factory).
+
     """
     try:
         raw_iterations = client.git.get_pull_request_iterations(repository, pr_id, project=project)
@@ -62,7 +65,8 @@ def get_iteration_changes(
     iteration_id: int,
     project: str,
 ) -> list[FileChange]:
-    """Return file changes for a specific iteration with changeTrackingId.
+    """
+    Return file changes for a specific iteration with changeTrackingId.
 
     Uses ``compare_to=0`` (default) which returns all files changed in the
     PR relative to the merge base, not just files changed in this specific
@@ -70,6 +74,7 @@ def get_iteration_changes(
 
     Raises:
         ActionableError: When the SDK call fails (connection factory).
+
     """
     try:
         raw_changes = client.git.get_pull_request_iteration_changes(
@@ -109,7 +114,8 @@ def get_latest_iteration_context(
     pr_id: int,
     project: str,
 ) -> IterationContext:
-    """Convenience: latest iteration ID + file path to FileChange map.
+    """
+    Return the latest iteration context: iteration ID + file path to FileChange map.
 
     Calls :func:`get_pr_iterations` then :func:`get_iteration_changes`
     for the latest iteration. The returned :class:`IterationContext`
@@ -119,6 +125,7 @@ def get_latest_iteration_context(
     Raises:
         ActionableError: When the PR has no iterations (validation) or
             when SDK calls fail (connection).
+
     """
     iterations = get_pr_iterations(client, repository, pr_id, project)
     if not iterations:

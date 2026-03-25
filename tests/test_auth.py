@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.auth — ConnectionFactory and token bridge.
+"""
+BDD tests for ado_workflows.auth — ConnectionFactory and token bridge.
 
 Covers:
     TestConnectionCreation — factory creates valid SDK connections

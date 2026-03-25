@@ -1,4 +1,5 @@
-"""Layer 3 — PR context resolution and identity.
+"""
+Layer 3 — PR context resolution and identity.
 
 Composes Layer 1 (URL parsing) and Layer 2 (RepositoryContext) to establish
 a fully resolved PR context from either a URL or a numeric PR ID.
@@ -33,7 +34,8 @@ _REQUIRED_FIELDS = ("organization", "project", "repository", "pr_id")
 
 @dataclass
 class AzureDevOpsPRContext:
-    """Resolved PR context — everything needed to address a single PR.
+    """
+    Resolved PR context — everything needed to address a single PR.
 
     Constructed via :meth:`from_url` or :meth:`from_pr_id`, or through
     the :func:`establish_pr_context` convenience factory.
@@ -52,7 +54,8 @@ class AzureDevOpsPRContext:
 
     @classmethod
     def from_url(cls, pr_url: str) -> AzureDevOpsPRContext:
-        """Create context by parsing a PR URL.
+        """
+        Create context by parsing a PR URL.
 
         Delegates to :func:`parse_ado_url` and validates that all required
         fields were extracted.  Raises :class:`ActionableError` naming any
@@ -94,7 +97,8 @@ class AzureDevOpsPRContext:
         pr_id: int,
         working_directory: str | None = None,
     ) -> AzureDevOpsPRContext:
-        """Create context from a numeric PR ID using RepositoryContext.
+        """
+        Create context from a numeric PR ID using RepositoryContext.
 
         Calls :meth:`RepositoryContext.get` to discover the org, project,
         and repository, then constructs the PR URL.  Raises
@@ -144,7 +148,8 @@ class AzureDevOpsPRContext:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize to dict including computed properties.
+        """
+        Serialize to dict including computed properties.
 
         Returns all dataclass fields plus ``org_url``.
         """
@@ -157,7 +162,8 @@ def establish_pr_context(
     url_or_id: str,
     working_directory: str | None = None,
 ) -> AzureDevOpsPRContext:
-    """Route ambiguous input to the correct factory method.
+    """
+    Route ambiguous input to the correct factory method.
 
     - URL-shaped strings (containing ``://``, ``dev.azure.com``, or
       ``visualstudio.com``) → :meth:`AzureDevOpsPRContext.from_url`
@@ -208,7 +214,8 @@ def get_pr_author(
     pr_id: int,
     project: str,
 ) -> UserIdentity:
-    """Return the identity of the PR creator.
+    """
+    Return the identity of the PR creator.
 
     Args:
         client: An authenticated :class:`~client.AdoClient`.
@@ -220,6 +227,7 @@ def get_pr_author(
 
     Raises:
         ActionableError: When the PR does not exist or cannot be fetched.
+
     """
     try:
         pr = client.git.get_pull_request_by_id(pr_id, project=project)

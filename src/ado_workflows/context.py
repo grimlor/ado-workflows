@@ -1,4 +1,5 @@
-"""Layer 2 — Repository context management with caching and thread-safety.
+"""
+Layer 2 — Repository context management with caching and thread-safety.
 
 Provides session-level repository context so that multiple tool calls within
 a single MCP session share the same discovered repository information without
@@ -29,7 +30,8 @@ _SERVICE = "Azure DevOps"
 
 
 class RepositoryContext:
-    """Thread-safe, session-level repository context manager.
+    """
+    Thread-safe, session-level repository context manager.
 
     All public methods are classmethods operating on class-level state
     (effectively a singleton).  Every method acquires ``_lock`` before
@@ -53,7 +55,8 @@ class RepositoryContext:
 
     @classmethod
     def set(cls, working_directory: str) -> dict[str, Any]:
-        """Set the active repository context for subsequent tool operations.
+        """
+        Set the active repository context for subsequent tool operations.
 
         Validates the path, runs discovery, and caches the result.  On
         failure the previous context is cleared so callers never operate
@@ -117,7 +120,8 @@ class RepositoryContext:
 
     @classmethod
     def get(cls, working_directory: str | None = None) -> dict[str, Any]:
-        """Get repository info — cached, overridden, or via intelligent discovery.
+        """
+        Get repository info — cached, overridden, or via intelligent discovery.
 
         * No args + cache → return cached (source ``"cached"``)
         * No args + no cache → attempt intelligent discovery (source ``"intelligent_discovery"``)
@@ -199,7 +203,8 @@ class RepositoryContext:
 
     @classmethod
     def _discover(cls, working_directory: str | None) -> dict[str, Any]:
-        """Run git discovery via Layer 1 primitives.
+        """
+        Run git discovery via Layer 1 primitives.
 
         Uses :func:`discover_repositories` + :func:`infer_target_repository`
         to find and select a repository.  If *working_directory* is ``None``,
@@ -237,20 +242,20 @@ class RepositoryContext:
 
 
 def set_repository_context(working_directory: str) -> dict[str, Any]:
-    """Convenience wrapper for :meth:`RepositoryContext.set`."""
+    """Delegate to :meth:`RepositoryContext.set`."""
     return RepositoryContext.set(working_directory)
 
 
 def get_repository_context(working_directory: str | None = None) -> dict[str, Any]:
-    """Convenience wrapper for :meth:`RepositoryContext.get`."""
+    """Delegate to :meth:`RepositoryContext.get`."""
     return RepositoryContext.get(working_directory)
 
 
 def get_context_status() -> dict[str, Any]:
-    """Convenience wrapper for :meth:`RepositoryContext.status`."""
+    """Delegate to :meth:`RepositoryContext.status`."""
     return RepositoryContext.status()
 
 
 def clear_repository_context() -> dict[str, Any]:
-    """Convenience wrapper for :meth:`RepositoryContext.clear`."""
+    """Delegate to :meth:`RepositoryContext.clear`."""
     return RepositoryContext.clear()

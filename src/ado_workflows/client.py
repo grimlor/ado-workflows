@@ -1,4 +1,5 @@
-"""Typed accessors for Azure DevOps SDK clients.
+"""
+Typed accessors for Azure DevOps SDK clients.
 
 Wraps :meth:`Connection.get_client` with lazy, cached properties that
 provide type-safe access to the Git, Core, and Work Item Tracking clients.
@@ -40,7 +41,8 @@ _WIT_CLIENT_PATH = (
 
 
 class AdoClient:
-    """Typed, lazy accessor for Azure DevOps SDK clients.
+    """
+    Typed, lazy accessor for Azure DevOps SDK clients.
 
     Each client property is initialized on first access and cached for
     the lifetime of this instance.  If the underlying connection's token
@@ -51,9 +53,11 @@ class AdoClient:
     connection:
         An authenticated :class:`Connection` (typically from
         :meth:`ConnectionFactory.get_connection`).
+
     """
 
     def __init__(self, connection: Connection) -> None:
+        """Initialize the client wrapper with an authenticated connection."""
         self._connection: Connection = connection
 
     @cached_property

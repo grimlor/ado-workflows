@@ -1,4 +1,5 @@
-"""PR lifecycle operations — create, (future: update, complete).
+"""
+PR lifecycle operations — create, (future: update, complete).
 
 Provides :func:`create_pull_request` which constructs a
 :class:`~azure.devops.v7_1.git.models.GitPullRequest` and delegates to
@@ -41,7 +42,8 @@ def create_pull_request(
     description: str | None = None,
     is_draft: bool = False,
 ) -> CreatedPR:
-    """Create a pull request via the Azure DevOps SDK.
+    """
+    Create a pull request via the Azure DevOps SDK.
 
     Branch names are normalised to include ``refs/heads/`` if missing.
 
@@ -60,6 +62,7 @@ def create_pull_request(
 
     Raises:
         ActionableError: When the SDK call fails.
+
     """
     pr_model = GitPullRequest(
         source_ref_name=_normalize_branch(source_branch),

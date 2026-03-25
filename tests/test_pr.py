@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.pr — PR context resolution.
+"""
+BDD tests for ado_workflows.pr — PR context resolution.
 
 Covers:
 - TestURLParsing: from_url() with valid URLs, missing fields, unparseable URLs

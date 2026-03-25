@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.models — domain types.
+"""
+BDD tests for ado_workflows.models — domain types.
 
 Covers:
 - TestReviewerInfoConstruction: ReviewerInfo dataclass with reviewer identity and vote metadata

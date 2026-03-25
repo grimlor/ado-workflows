@@ -1,4 +1,5 @@
-"""ado-workflows: Azure DevOps workflow automation library.
+"""
+ado-workflows: Azure DevOps workflow automation library.
 
 Three-layer API for Azure DevOps operations:
 - Layer 1 — Primitives: pure functions (URL parsing, git inspection, date parsing)

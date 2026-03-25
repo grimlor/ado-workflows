@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows identity operations -- PR author and current user.
+"""
+BDD tests for ado_workflows identity operations -- PR author and current user.
 
 Covers:
 - TestGetPrAuthor: extract PR creator's identity

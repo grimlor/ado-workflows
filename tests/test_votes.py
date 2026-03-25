@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.votes — vote classification and team deduplication.
+"""
+BDD tests for ado_workflows.votes — vote classification and team deduplication.
 
 Covers:
 - TestVoteTextMapping: VOTE_TEXT constant maps vote integers to human-readable text
@@ -39,7 +40,8 @@ def _reviewer(
     is_container: bool | None = None,
     voted_for: list[Mock] | None = None,
 ) -> Mock:
-    """Build a mock IdentityRefWithVote matching the Azure DevOps SDK.
+    """
+    Build a mock IdentityRefWithVote matching the Azure DevOps SDK.
 
     Attributes use snake_case (``display_name``, ``is_container``, etc.)
     and ``voted_for`` items are Mock objects with an ``.id`` attribute,

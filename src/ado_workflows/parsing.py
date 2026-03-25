@@ -1,4 +1,5 @@
-"""Layer 1 — URL and date parsing primitives for Azure DevOps.
+"""
+Layer 1 — URL and date parsing primitives for Azure DevOps.
 
 Pure functions, no state, no SDK dependency.
 """
@@ -10,7 +11,8 @@ from datetime import datetime
 
 
 def parse_ado_url(url: str) -> tuple[str, str, str, str]:
-    """Parse an Azure DevOps URL into its constituent parts.
+    """
+    Parse an Azure DevOps URL into its constituent parts.
 
     Supports:
     - ``https://dev.azure.com/{org}/{project}/_git/{repo}``
@@ -25,6 +27,7 @@ def parse_ado_url(url: str) -> tuple[str, str, str, str]:
         ``(organization, project, repository, pr_id)``
         — all empty strings when *url* is not a recognised format.
         ``pr_id`` is an empty string when the URL is not a PR URL.
+
     """
     org = project = repository = pr_id = ""
 
@@ -37,7 +40,8 @@ def parse_ado_url(url: str) -> tuple[str, str, str, str]:
 
 
 def parse_ado_date(date_str: str) -> datetime | None:
-    """Parse an Azure DevOps API date string into a local-time *datetime*.
+    """
+    Parse an Azure DevOps API date string into a local-time *datetime*.
 
     Handles ISO-8601 variants returned by the API:
 
@@ -55,6 +59,7 @@ def parse_ado_date(date_str: str) -> datetime | None:
     Returns:
         A naive *datetime* in local time, or ``None`` if *date_str* is
         empty or cannot be parsed.
+
     """
     if not date_str:
         return None

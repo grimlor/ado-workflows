@@ -1,4 +1,5 @@
-"""Domain types for Azure DevOps PR workflows.
+"""
+Domain types for Azure DevOps PR workflows.
 
 Data containers with no business logic — used by :mod:`votes`, :mod:`review`,
 and :mod:`comments` modules.
@@ -37,7 +38,8 @@ class ReviewerInfo:
 
 @dataclass
 class VoteStatus:
-    """Classified vote for a single reviewer.
+    """
+    Classified vote for a single reviewer.
 
     Produced by :func:`votes.determine_vote_status`.  Includes two-tier
     staleness detection results and team-container relationship data.
@@ -81,7 +83,8 @@ class PendingPR:
 
 @dataclass
 class ApprovalStatus:
-    """Computed approval state for a PR.
+    """
+    Computed approval state for a PR.
 
     Categorised lists of :class:`VoteStatus` instances, plus aggregate
     approval/rejection flags used by :func:`review.get_review_status`.
@@ -103,7 +106,8 @@ def _empty_errors() -> list[ActionableError]:
 
 @dataclass
 class ReviewStatus:
-    """Full review status for a single PR.
+    """
+    Full review status for a single PR.
 
     Returned by :func:`review.get_review_status`.  Contains PR metadata,
     nested :class:`ApprovalStatus`, a human-readable summary, and any
@@ -158,7 +162,8 @@ class CommentInfo:
 
 @dataclass
 class CommentAnalysis:
-    """Full comment analysis for a PR.
+    """
+    Full comment analysis for a PR.
 
     Returned by :func:`comments.analyze_pr_comments`.
     """
@@ -190,7 +195,8 @@ class CreatedPR:
 
 @dataclass
 class ResolveResult:
-    """Batch thread-resolution outcome.
+    """
+    Batch thread-resolution outcome.
 
     Returned by :func:`comments.resolve_comments`.  Threads are
     partitioned into *resolved* (status changed), *errors* (SDK error,
@@ -210,7 +216,8 @@ class ResolveResult:
 
 @dataclass
 class PendingReviewResult:
-    """Result container for pending review analysis.
+    """
+    Result container for pending review analysis.
 
     Returned by :func:`review.analyze_pending_reviews`.  Surfaces both
     successful results and per-PR enrichment failures so callers can
@@ -228,7 +235,8 @@ class PendingReviewResult:
 
 @dataclass(frozen=True)
 class IterationInfo:
-    """Metadata for a single PR iteration.
+    """
+    Metadata for a single PR iteration.
 
     Produced by :func:`iterations.get_pr_iterations`.
     """
@@ -240,7 +248,8 @@ class IterationInfo:
 
 @dataclass(frozen=True)
 class FileChange:
-    """A file changed in a PR iteration.
+    """
+    A file changed in a PR iteration.
 
     Produced by :func:`iterations.get_iteration_changes`.  The
     ``change_tracking_id`` is required for anchoring comment threads
@@ -254,7 +263,8 @@ class FileChange:
 
 @dataclass(frozen=True)
 class IterationContext:
-    """Resolved iteration state for comment positioning.
+    """
+    Resolved iteration state for comment positioning.
 
     Produced by :func:`iterations.get_latest_iteration_context`.
     Maps file paths (no leading slash) to their :class:`FileChange`
@@ -267,7 +277,8 @@ class IterationContext:
 
 @dataclass(frozen=True)
 class UserIdentity:
-    """An Azure DevOps user identity with stable GUID for comparison.
+    """
+    An Azure DevOps user identity with stable GUID for comparison.
 
     Display names vary by context (e.g., ``"Alice"`` vs ``"Alice (CONTOSO)"``).
     The ``id`` GUID is the only reliable comparator across ADO surfaces.
@@ -282,7 +293,8 @@ class UserIdentity:
 
 @dataclass(frozen=True)
 class FileContent:
-    """Content of a single file from a repository.
+    """
+    Content of a single file from a repository.
 
     Produced by :func:`content.get_file_content`.
     """
@@ -295,7 +307,8 @@ class FileContent:
 
 @dataclass(frozen=True)
 class ContentResult:
-    """Result of a batch file content fetch.
+    """
+    Result of a batch file content fetch.
 
     Follows partial-success pattern: successfully fetched files in
     ``files``, failed fetches in ``failures`` as :class:`ActionableError`
@@ -318,7 +331,8 @@ class CommentPayload:
 
 @dataclass(frozen=True)
 class PostingResult:
-    """Result of a batch comment posting operation.
+    """
+    Result of a batch comment posting operation.
 
     Follows partial-success pattern (same as :class:`ResolveResult`).
     Failures are :class:`ActionableError` instances with

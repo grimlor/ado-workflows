@@ -1,4 +1,5 @@
-"""Vote classification and team-container deduplication.
+"""
+Vote classification and team-container deduplication.
 
 Pure functions — no I/O, no SDK calls.  Operates on SDK
 :class:`~azure.devops.v7_1.git.models.IdentityRefWithVote` model
@@ -23,7 +24,8 @@ def determine_vote_status(
     vote_timestamps: dict[str, datetime] | None = None,
     latest_commit_date: datetime | None = None,
 ) -> VoteStatus:
-    """Classify a single reviewer's vote with two-tier staleness detection.
+    """
+    Classify a single reviewer's vote with two-tier staleness detection.
 
     Staleness tiers (only for approval votes 10, 5):
 
@@ -40,6 +42,7 @@ def determine_vote_status(
 
     Returns:
         A fully populated :class:`VoteStatus`.
+
     """
     vote: int = reviewer.vote or 0
     display_name: str = reviewer.display_name or "Unknown"
@@ -85,7 +88,8 @@ def determine_vote_status(
 def deduplicate_team_containers(
     vote_statuses: list[VoteStatus],
 ) -> list[VoteStatus]:
-    """Remove team containers already represented by individual voters.
+    """
+    Remove team containers already represented by individual voters.
 
     When an individual votes on a PR, ADO also marks their team container
     as having voted.  This function removes the container entries to avoid

@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.review — review helpers and orchestrator.
+"""
+BDD tests for ado_workflows.review — review helpers and orchestrator.
 
 Covers:
 - TestFetchRequiredApprovals: policy evaluation parsing, defaults, error surfacing
@@ -67,7 +68,8 @@ def _make_vote_thread(
     reviewer_id: str = "guid-1",
     published_date: datetime | None = None,
 ) -> Mock:
-    """Build a mock thread with a CodeReviewVotedByIdentity property.
+    """
+    Build a mock thread with a CodeReviewVotedByIdentity property.
 
     Mirrors real SDK behavior: ``$value`` is a thread-local identity
     reference number (e.g. ``"1"``), resolved via ``thread.identities``
@@ -102,7 +104,8 @@ def _make_reviewer(
     is_container: bool | None = None,
     voted_for: list[Mock] | None = None,
 ) -> Mock:
-    """Build a mock IdentityRefWithVote matching the Azure DevOps SDK.
+    """
+    Build a mock IdentityRefWithVote matching the Azure DevOps SDK.
 
     Attributes use snake_case (``display_name``, ``is_container``, etc.)
     and ``voted_for`` items are Mock objects with an ``.id`` attribute.
@@ -137,7 +140,8 @@ def _mock_full_client(
     vote_threads: list[Mock] | None = None,
     policy_evaluations: list[Mock] | None = None,
 ) -> Mock:
-    """Build a fully-wired mock AdoClient for get_review_status tests.
+    """
+    Build a fully-wired mock AdoClient for get_review_status tests.
 
     Configures git.get_pull_request_by_id, git.get_pull_request_commits,
     git.get_pull_request_properties, git.get_threads, and

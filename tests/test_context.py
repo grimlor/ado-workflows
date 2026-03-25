@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.context — RepositoryContext state management.
+"""
+BDD tests for ado_workflows.context — RepositoryContext state management.
 
 Covers:
     TestContextSet — setting the active repository context

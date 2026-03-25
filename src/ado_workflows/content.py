@@ -1,4 +1,5 @@
-"""File content retrieval from Azure DevOps repositories.
+"""
+File content retrieval from Azure DevOps repositories.
 
 Provides single-file retrieval (:func:`get_file_content`) and batch
 PR-scoped retrieval (:func:`get_changed_file_contents`) with
@@ -28,7 +29,8 @@ def get_file_content(
     version: str | None = None,
     version_type: str = "branch",
 ) -> FileContent:
-    """Fetch a single file's content from a repository ref.
+    """
+    Fetch a single file's content from a repository ref.
 
     Args:
         client: An authenticated :class:`~client.AdoClient`.
@@ -43,6 +45,7 @@ def get_file_content(
 
     Raises:
         ActionableError: When the file does not exist or cannot be fetched.
+
     """
     try:
         version_descriptor = None
@@ -102,7 +105,8 @@ def get_changed_file_contents(
     *,
     file_paths: list[str] | None = None,
 ) -> ContentResult:
-    """Fetch file contents for files changed in a PR.
+    """
+    Fetch file contents for files changed in a PR.
 
     Uses the PR's source branch ref. If *file_paths* is ``None``, discovers
     changed files from the latest iteration and fetches all of them.
@@ -120,6 +124,7 @@ def get_changed_file_contents(
 
     Returns:
         :class:`~models.ContentResult` with files and failures.
+
     """
     # Get the source branch for fetching content
     try:

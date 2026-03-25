@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.lifecycle — PR lifecycle operations.
+"""
+BDD tests for ado_workflows.lifecycle — PR lifecycle operations.
 
 Covers:
 - TestCreatePullRequest: SDK-based PR creation with branch normalization

@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.comments — comment analysis, sanitization, and writes.
+"""
+BDD tests for ado_workflows.comments — comment analysis, sanitization, and writes.
 
 Covers:
 - TestSanitizeAdoResponse: Windows-1252 smart-quote fix (pure function)

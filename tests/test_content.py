@@ -1,4 +1,5 @@
-"""BDD tests for ado_workflows.content -- file content retrieval.
+"""
+BDD tests for ado_workflows.content -- file content retrieval.
 
 Covers:
 - TestGetFileContent: fetch single file content from a repository ref
