@@ -104,12 +104,16 @@ def get_changed_file_contents(
     project: str,
     *,
     file_paths: list[str] | None = None,
+    exclude_extensions: list[str] | None = None,
 ) -> ContentResult:
     """
     Fetch file contents for files changed in a PR.
 
     Uses the PR's source branch ref. If *file_paths* is ``None``, discovers
     changed files from the latest iteration and fetches all of them.
+
+    For completed PRs whose source branch has been deleted, falls back to
+    the ``last_merge_source_commit`` SHA.
 
     Uses partial-success semantics: files that fail to fetch are collected
     in :attr:`ContentResult.failures` with the path and error, not raised.
@@ -121,12 +125,15 @@ def get_changed_file_contents(
         project: Azure DevOps project name or GUID.
         file_paths: Optional list of specific file paths to fetch.
             If ``None``, fetches all changed files.
+        exclude_extensions: Optional list of file extensions to skip
+            (e.g. ``[".lock", ".json"]``).  Matched case-insensitively.
+            A leading dot is added if missing.
 
     Returns:
         :class:`~models.ContentResult` with files and failures.
 
     """
-    # Get the source branch for fetching content
+    # Get the PR metadata for branch/commit resolution
     try:
         pr = client.git.get_pull_request_by_id(pr_id, project=project)
         branch = pr.source_ref_name.replace("refs/heads/", "")
@@ -146,8 +153,21 @@ def get_changed_file_contents(
         except Exception:
             file_paths = []
 
+    # Apply extension filtering before fetching
+    if exclude_extensions:
+        normalized = [
+            ext.lower() if ext.startswith(".") else f".{ext.lower()}" for ext in exclude_extensions
+        ]
+        file_paths = [
+            p for p in file_paths if not any(p.lower().endswith(ext) for ext in normalized)
+        ]
+
     if not file_paths:
         return ContentResult(files=[], failures=[])
+
+    # Determine version reference: branch first, commit SHA fallback for completed PRs
+    version = branch
+    version_type = "branch"
 
     # Fetch each file with partial-success
     files: list[FileContent] = []
@@ -155,9 +175,50 @@ def get_changed_file_contents(
 
     for path in file_paths:
         try:
-            fc = get_file_content(client, repository, path, project, version=branch)
+            fc = get_file_content(
+                client, repository, path, project, version=version, version_type=version_type
+            )
             files.append(fc)
         except Exception as exc:
+            # For completed PRs, try fallback to merge commit SHA
+            merge_commit = pr.last_merge_source_commit
+            if (
+                pr.status == "completed"
+                and version_type == "branch"
+                and merge_commit is not None
+                and merge_commit.commit_id is not None
+            ):
+                try:
+                    fc = get_file_content(
+                        client,
+                        repository,
+                        path,
+                        project,
+                        version=merge_commit.commit_id,
+                        version_type="commit",
+                    )
+                    files.append(fc)
+                    continue
+                except Exception:
+                    pass  # Fall through to original error handling
+
+            # For completed PRs with deleted branch and no merge commit, raise
+            if (
+                pr.status == "completed"
+                and ("TF401174" in str(exc) or "does not exist" in str(exc).lower())
+                and (merge_commit is None or merge_commit.commit_id is None)
+            ):
+                raise ActionableError.not_found(
+                    service="AzureDevOps",
+                    resource_type="PR source",
+                    resource_id=f"PR {pr_id}",
+                    raw_error=str(exc),
+                    suggestion=(
+                        f"Source branch for PR {pr_id} has been deleted and no "
+                        f"merge commit is available. The PR source code cannot be retrieved."
+                    ),
+                ) from exc
+
             err = ActionableError.internal(
                 service="ado-workflows",
                 operation="get_file_content",

@@ -9,14 +9,6 @@ class IdentityRef:
     display_name: str
     unique_name: str
     id: str
-    def __init__(
-        self,
-        *,
-        display_name: str | None = None,
-        unique_name: str | None = None,
-        id: str | None = None,
-        **kwargs: Any,
-    ) -> None: ...
 
 
 class CommentPosition:
@@ -158,6 +150,7 @@ class GitPullRequest:
     created_by: IdentityRef
     reviewers: list[IdentityRefWithVote] | None
     description: str | None
+    last_merge_source_commit: GitCommitRef | None
     def __init__(
         self,
         *,
