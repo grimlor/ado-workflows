@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-03-27)
+
+### Chores
+
+- **lint**: Add pydocstyle rules and fix docstring issues
+  ([`4438527`](https://github.com/grimlor/ado-workflows/commit/4438527cc66f000e84b6ef183514f2c12efafe79))
+
+### Code Style
+
+- `task format` changes only
+  ([`36082cd`](https://github.com/grimlor/ado-workflows/commit/36082cd2f94b3d179d7db20a9be0cce9d913c822))
+
+### Features
+
+- **content**: Add exclude_extensions filtering and completed-PR fallback
+  ([`87926d0`](https://github.com/grimlor/ado-workflows/commit/87926d09cd3a30ac5fbcb6050086c970b7eb5591))
+
+
 ## v0.2.2 (2026-03-19)
 
 ### Bug Fixes
