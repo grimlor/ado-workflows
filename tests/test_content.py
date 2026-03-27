@@ -52,7 +52,8 @@ def _mock_pr_client_with_files(
     status: str = "active",
     last_merge_source_commit: str | None = None,
 ) -> Mock:
-    """Return a mock AdoClient with a PR that has the given changed files.
+    """
+    Return a mock AdoClient with a PR that has the given changed files.
 
     Configures all SDK mocks needed for get_changed_file_contents:
     PR lookup, iteration discovery, iteration changes, and file content.
