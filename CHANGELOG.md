@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-03-28)
+
+### Continuous Integration
+
+- Add workflow_dispatch trigger to release workflow
+  ([`183cda1`](https://github.com/grimlor/ado-workflows/commit/183cda126d50be00e953e87787a2d363ffc071c8))
+
+- Support manual tag input for re-publishing failed releases
+  ([`6cf8957`](https://github.com/grimlor/ado-workflows/commit/6cf8957d3ae58e76b2b7d15c48cdf7f2c37c46dc))
+
+### Features
+
+- **comments**: Add rich comment posting with formatting and praise filtering
+  ([`095e3ff`](https://github.com/grimlor/ado-workflows/commit/095e3ff90a16939e82c70886249796e7715aa63c))
+
+
 ## v0.3.0 (2026-03-27)
 
 ### Chores
