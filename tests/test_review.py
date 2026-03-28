@@ -329,6 +329,7 @@ class TestFetchVoteTimestamps:
           (7) a None published_date is skipped
           (8) an identity ref not found in thread.identities is skipped
           (9) a resolved identity with an empty id is skipped
+          (10) a duplicate vote with an older timestamp is discarded
     WHY: ADO has no public API for "when did reviewer X vote". The thread-based
          approach is the only reliable method. Documented as fragile.
 
@@ -527,6 +528,27 @@ class TestFetchVoteTimestamps:
         # Then: empty dict (identity has no GUID)
         assert result == {}, f"Expected empty dict for empty identity id, got {result}"
 
+    def test_duplicate_vote_older_second_is_discarded(self) -> None:
+        """
+        Given two vote threads for the same reviewer where the second is older
+        When fetch_vote_timestamps is called
+        Then the newer (first) timestamp is kept and the older is discarded
+        """
+        # Given: two threads for the same reviewer — newer first, older second
+        ts_new = datetime(2025, 6, 20, 16, 0, 0, tzinfo=UTC)
+        ts_old = datetime(2025, 6, 10, 8, 0, 0, tzinfo=UTC)
+        thread_new = _make_vote_thread(reviewer_id="guid-x", published_date=ts_new)
+        thread_old = _make_vote_thread(reviewer_id="guid-x", published_date=ts_old)
+        client = _mock_thread_client([thread_new, thread_old])
+
+        # When: fetch_vote_timestamps is called
+        result = fetch_vote_timestamps(client, "MyRepo", 42, "MyProject")
+
+        # Then: the newer timestamp is kept (older is discarded)
+        assert result == {"guid-x": ts_new}, (
+            f"Expected newest timestamp {ts_new} kept, got {result}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestGetReviewStatus
@@ -547,17 +569,18 @@ class TestGetReviewStatus:
               summary
           (4) a stale approval from PR properties populates
               invalidated_approvers
-          (5) a stale approval from vote timestamp triggers tier-2 detection
-          (6) a waiting-for-author reviewer populates waiting_reviewers
-          (7) no reviewers needs all approvals
-          (8) team containers are deduplicated in approval counts
-          (9) a PR-not-found SDK exception raises ActionableError
-          (10) no commits sets last_commit_date=None
-          (11) all metadata fields (pr_id, title, author, url, days_open)
+          (5) OneReviewPolicyPilot with empty $value skips staleness
+          (6) a stale approval from vote timestamp triggers tier-2 detection
+          (7) a waiting-for-author reviewer populates waiting_reviewers
+          (8) no reviewers needs all approvals
+          (9) team containers are deduplicated in approval counts
+          (10) a PR-not-found SDK exception raises ActionableError
+          (11) no commits sets last_commit_date=None
+          (12) all metadata fields (pr_id, title, author, url, days_open)
                are populated correctly
-          (12) a properties fetch failure skips staleness and produces a
+          (13) a properties fetch failure skips staleness and produces a
                warning
-          (13) a policy API failure produces a warning and uses the default
+          (14) a policy API failure produces a warning and uses the default
                count
     WHY: This is the primary read operation for PR review workflows. PDP's
          version used 20 subprocess calls; this uses 4-5 SDK calls. Surfacing
@@ -726,6 +749,49 @@ class TestGetReviewStatus:
         assert result.approval_status.invalidated_approvers[0].name == "Alice", (
             f"Expected invalidated approver 'Alice', got "
             f"{result.approval_status.invalidated_approvers[0].name}"
+        )
+
+    def test_one_review_policy_empty_value_skips_staleness(self) -> None:
+        """
+        Given PR properties contain OneReviewPolicyPilot with an empty $value
+        When get_review_status is called
+        Then no stale voter IDs are extracted and the approval remains valid
+        """
+        # Given: OneReviewPolicyPilot exists but $value is empty string
+        reviewers = [
+            _make_reviewer(
+                display_name="Alice",
+                reviewer_id="guid-a",
+                vote=10,
+            ),
+        ]
+        commit = _make_commit(
+            author_date=datetime(2025, 6, 10, tzinfo=UTC),
+        )
+        pr_properties: dict[str, object] = {
+            "OneReviewPolicyPilot": {
+                "$type": "System.String",
+                "$value": "",
+            },
+        }
+        policy = _make_policy_evaluation(min_approver_count=1)
+        client = _mock_full_client(
+            reviewers=reviewers,
+            commits=[commit],
+            pr_properties=pr_properties,
+            policy_evaluations=[policy],
+        )
+
+        # When: get_review_status is called
+        result = get_review_status(client, 42, "MyProject", "MyRepo")
+
+        # Then: no stale detection — approval is valid
+        assert result.approval_status.is_approved is True, (
+            "Expected is_approved=True when OneReviewPolicyPilot has empty $value"
+        )
+        assert len(result.approval_status.invalidated_approvers) == 0, (
+            f"Expected 0 invalidated approvers, got "
+            f"{len(result.approval_status.invalidated_approvers)}"
         )
 
     def test_fallback_staleness_from_vote_timestamp(self) -> None:

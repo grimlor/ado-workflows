@@ -270,6 +270,7 @@ class TestAnalyzePRComments:
           (11) at least one active thread means resolution_ready=False
           (12) line_start falls back to leftFileStart when rightFileStart is absent
           (13) the SDK call receives the correct parameters
+          (14) author with all comments deleted is absent from author_samples
     WHY: Comment analysis drives PR review workflows — knowing which threads
          are unresolved, who commented, and whether a PR is resolution-ready.
 
@@ -546,6 +547,35 @@ class TestAnalyzePRComments:
         sample = result.author_samples["Alice Smith"]
         assert sample.latest_comment == "This is the real comment", (
             f"Expected latest non-deleted comment, got '{sample.latest_comment}'"
+        )
+
+    def test_author_with_all_deleted_comments_absent_from_author_samples(self) -> None:
+        """
+        Given an author whose only comments are all deleted
+        When analyze_pr_comments is called
+        Then that author does not appear in author_samples
+        """
+        # Given: one author with all deleted comments, another with a live comment
+        thread = _make_thread(
+            thread_id=1,
+            status="active",
+            comments=[
+                {"author": "Ghost User", "content": "Deleted remark", "is_deleted": True},
+                {"author": "Alice Smith", "content": "Real feedback"},
+            ],
+        )
+        client = _mock_client([thread])
+
+        # When: called
+        result = analyze_pr_comments(client, pr_id=42, project="Proj", repository="Repo")
+
+        # Then: Ghost User absent, Alice present
+        assert "Ghost User" not in result.author_samples, (
+            f"Author with all deleted comments should not appear in author_samples, "
+            f"got keys: {list(result.author_samples.keys())}"
+        )
+        assert "Alice Smith" in result.author_samples, (
+            "Author with non-deleted comments should still appear"
         )
 
     def test_all_threads_resolved_means_resolution_ready(self) -> None:

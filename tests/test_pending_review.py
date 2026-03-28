@@ -690,6 +690,9 @@ class TestAnalyzePendingReviewsEdgeCases:
           (4) creator_filter matching is case-insensitive
           (5) a properties API failure is gracefully ignored
           (6) a policy fetch failure uses the default required count
+          (7) a PR with no commits enriches without staleness detection
+          (8) OneReviewPolicyPilot with empty $value skips stale extraction
+          (9) a PR with a non-dev.azure.com URL yields empty organization
     WHY: Real Azure DevOps data frequently has missing or unexpected values.
          Defensive handling prevents crashes during batch analysis.
 
@@ -877,4 +880,102 @@ class TestAnalyzePendingReviewsEdgeCases:
         )
         assert pr_result.valid_approvals_count == 1, (
             f"Expected valid_approvals_count=1, got {pr_result.valid_approvals_count}"
+        )
+
+    def test_pr_with_no_commits_sets_last_commit_date_none(self) -> None:
+        """
+        Given a PR with no commits
+        When analyze_pending_reviews is called
+        Then the PR is enriched without staleness detection (no commit date)
+        """
+        # Given: PR with pending reviewer but no commits
+        reviewer = _make_reviewer(vote=0)
+        pr = _make_pr(pr_id=1, reviewers=[reviewer])
+        client = _mock_client(
+            prs=[pr],
+            # No commits_per_pr — defaults to empty list
+        )
+
+        # When: analyzed
+        result = analyze_pending_reviews(client, "Proj", "Repo")
+
+        # Then: PR appears (no crash from empty commits)
+        assert len(result.pending_prs) == 1, (
+            f"Expected 1 pending PR with no commits, got {len(result.pending_prs)}"
+        )
+
+    def test_one_review_policy_empty_value_in_enrich(self) -> None:
+        """
+        Given PR properties contain OneReviewPolicyPilot with an empty $value
+        When analyze_pending_reviews is called
+        Then no stale voter IDs are extracted and the approval is valid
+        """
+        # Given: OneReviewPolicyPilot exists but $value is empty
+        reviewer = _make_reviewer(
+            display_name="Alice",
+            vote=10,
+            reviewer_id="guid-a",
+        )
+        pending = _make_reviewer(
+            display_name="Bob",
+            vote=0,
+            reviewer_id="guid-b",
+        )
+        pr = _make_pr(pr_id=1, reviewers=[reviewer, pending])
+        commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
+        client = _mock_client(
+            prs=[pr],
+            commits_per_pr={1: [commit]},
+            properties_per_pr={
+                1: {
+                    "OneReviewPolicyPilot": {
+                        "$type": "System.String",
+                        "$value": "",
+                    },
+                },
+            },
+        )
+
+        # When: analyzed
+        result = analyze_pending_reviews(
+            client,
+            "Proj",
+            "Repo",
+            default_required_approvals=1,
+        )
+
+        # Then: PR appears (approval is valid, but pending reviewer remains)
+        assert len(result.pending_prs) == 1, (
+            f"Expected 1 pending PR, got {len(result.pending_prs)}"
+        )
+
+    def test_pr_with_non_dev_azure_com_url(self) -> None:
+        """
+        Given a PR whose API URL does not contain dev.azure.com/
+        When analyze_pending_reviews is called
+        Then organization is empty string (no crash)
+        """
+        # Given: PR with a visualstudio.com-style URL
+        reviewer = _make_reviewer(vote=0)
+        pr = _make_pr(
+            pr_id=1,
+            reviewers=[reviewer],
+            url="https://example.visualstudio.com/_apis/git/repositories/Repo/pullRequests/1",
+        )
+        commit = _make_commit(author_date=datetime.now(tz=UTC) - timedelta(days=1))
+        client = _mock_client(
+            prs=[pr],
+            commits_per_pr={1: [commit]},
+        )
+
+        # When: analyzed
+        result = analyze_pending_reviews(client, "Proj", "Repo")
+
+        # Then: PR appears with empty organization
+        assert len(result.pending_prs) == 1, (
+            f"Expected 1 pending PR, got {len(result.pending_prs)}"
+        )
+        assert result.pending_prs[0].organization == "", (
+            f"Expected empty organization for non-dev.azure.com URL, "
+            f"got '{result.pending_prs[0].organization}'"
         )

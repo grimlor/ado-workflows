@@ -271,6 +271,8 @@ class TestDiscoverRepositories:
           (2) a multi-repo workspace discovers all Azure DevOps children
           (3) an empty workspace returns an empty list
           (4) permission errors during scan return an empty list
+          (5) a non-ADO git repo at search_root returns an empty list
+          (6) a mixed workspace with non-ADO children skips them
     WHY: Multi-repo workspaces are common in enterprise environments —
          correct enumeration is the prerequisite for intelligent repo
          selection.
@@ -304,6 +306,24 @@ class TestDiscoverRepositories:
             f"Expected repo name 'MyRepo', got '{repos[0]['name']}'"
         )
 
+    def test_search_root_is_non_ado_git_repo_returns_empty(self, tmp_path: Path) -> None:
+        """
+        Given search_root is a git repo with a non-ADO remote (e.g. GitHub)
+        When discover_repositories is called
+        Then an empty list is returned (inspect_git_repository returns None)
+        """
+        # Given: search_root has a .git folder but remote is GitHub
+        repo = _make_git_repo(tmp_path, "GhRepo")
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            return_value=_git_success(_GITHUB_REMOTE),
+        ):
+            # When: repositories are discovered
+            repos = discover_repositories(str(repo))
+
+        # Then: empty list — non-ADO repo is not included
+        assert repos == [], f"Expected empty list for non-ADO git repo at search_root, got {repos}"
+
     def test_multi_repo_workspace_discovers_all_git_children(self, tmp_path: Path) -> None:
         """
         Given search_root contains multiple git repository subdirectories
@@ -334,6 +354,36 @@ class TestDiscoverRepositories:
         assert len(repos) == 2, f"Expected 2 repos, got {len(repos)}: {names}"
         assert "RepoA" in names, f"Expected RepoA in {names}"
         assert "RepoB" in names, f"Expected RepoB in {names}"
+
+    def test_mixed_workspace_skips_non_ado_children(self, tmp_path: Path) -> None:
+        """
+        Given a workspace with both ADO and non-ADO git repos
+        When discover_repositories is called
+        Then only the ADO repo is included; the non-ADO child is skipped
+        """
+        # Given: one ADO repo and one GitHub repo as children
+        workspace = tmp_path
+        _make_git_repo(workspace, "AdoRepo")
+        _make_git_repo(workspace, "GhRepo")
+
+        def git_response(*args: Any, **kwargs: Any) -> Mock:
+            cwd = str(kwargs.get("cwd", ""))
+            if "AdoRepo" in cwd:
+                return _git_success("https://dev.azure.com/ExampleOrg/Proj/_git/AdoRepo\n")
+            return _git_success(_GITHUB_REMOTE)
+
+        with patch(
+            "ado_workflows.discovery.subprocess.run",
+            side_effect=git_response,
+        ):
+            # When: repositories are discovered
+            repos = discover_repositories(str(workspace))
+
+        # Then: only the ADO repo is found
+        assert len(repos) == 1, f"Expected 1 ADO repo, got {len(repos)}"
+        assert repos[0]["name"] == "AdoRepo", (
+            f"Expected ADO repo name 'AdoRepo', got '{repos[0]['name']}'"
+        )
 
     def test_empty_workspace_returns_empty_list(self, tmp_path: Path) -> None:
         """

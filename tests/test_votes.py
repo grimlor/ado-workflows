@@ -133,13 +133,15 @@ class TestDetermineVoteStatus:
               has vote_invalidated=True via timestamp fallback
           (4) staleness from both policy and timestamp still produces
               vote_invalidated=True
-          (5) a no-vote (vote=0) is not affected by staleness data
-          (6) a rejected vote is classified correctly without invalidation
-          (7) a waiting-for-author vote is classified correctly without
+          (5) an approved vote whose timestamp follows the latest commit
+              has vote_invalidated=False (fresh)
+          (6) a no-vote (vote=0) is not affected by staleness data
+          (7) a rejected vote is classified correctly without invalidation
+          (8) a waiting-for-author vote is classified correctly without
               invalidation
-          (8) a container with null voted_for has voted_for_ids=[]
-          (9) an individual with voted_for IDs has those IDs extracted
-          (10) missing display_name defaults to "Unknown"
+          (9) a container with null voted_for has voted_for_ids=[]
+          (10) an individual with voted_for IDs has those IDs extracted
+          (11) missing display_name defaults to "Unknown"
     WHY: Centralizes vote classification so every consumer gets consistent
          staleness detection. PDP had send_pr_review_reminders skip this entirely.
 
@@ -263,6 +265,38 @@ class TestDetermineVoteStatus:
         # Then: vote is invalidated (primary takes precedence but both agree)
         assert status.vote_invalidated is True, (
             f"Expected vote_invalidated True, got {status.vote_invalidated}"
+        )
+
+    def test_approved_vote_fresh_by_timestamp(self) -> None:
+        """
+        Given a reviewer with vote=10 whose vote timestamp is after the latest commit
+        When determine_vote_status is called
+        Then vote_invalidated=False (vote is fresh)
+        """
+        # Given: an approved reviewer whose vote postdates the latest commit
+        reviewer = _reviewer(
+            display_name="Grace Hopper",
+            unique_name="grace@contoso.com",
+            reviewer_id="grace-id",
+            vote=10,
+        )
+        vote_timestamps = {"grace-id": datetime(2026, 3, 5, 10, 0, 0)}
+        latest_commit = datetime(2026, 3, 2, 14, 0, 0)
+
+        # When: the vote is classified with timestamp data (no stale IDs)
+        status = determine_vote_status(
+            reviewer,
+            vote_timestamps=vote_timestamps,
+            latest_commit_date=latest_commit,
+        )
+
+        # Then: vote is NOT invalidated — it's fresh
+        assert status.vote_invalidated is False, (
+            f"Expected vote_invalidated False (vote is after commit), "
+            f"got {status.vote_invalidated}"
+        )
+        assert status.vote_text == "Approved", (
+            f"Expected vote_text 'Approved', got '{status.vote_text}'"
         )
 
     def test_no_vote_not_affected_by_staleness(self) -> None:

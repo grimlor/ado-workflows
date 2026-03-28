@@ -554,9 +554,7 @@ def _enrich_pr(
     org = ""
     url_str: str = pr.url or ""
     if "dev.azure.com/" in url_str:
-        parts = url_str.split("dev.azure.com/")
-        if len(parts) > 1:
-            org = parts[1].split("/")[0]
+        org = url_str.split("dev.azure.com/")[1].split("/")[0]
 
     return PendingPR(
         pr_id=pr_id,

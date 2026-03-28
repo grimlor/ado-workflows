@@ -33,6 +33,7 @@ class TestAdoUrlParsing:
           (9) an HTTPS repo URL with .git suffix has the suffix stripped
           (10) an unsupported URL returns empty strings for all fields
           (11) an empty string returns empty strings for all fields
+          (12) a malformed SSH URL (missing segments) returns empty strings
     WHY: URL parsing is the foundation of every ADO operation — incorrect
          parsing cascades into wrong API calls, wrong repo targeting, and
          opaque failures.
@@ -194,6 +195,24 @@ class TestAdoUrlParsing:
 
         # Then: .git suffix is stripped
         assert repo == "MyRepo", f"Expected repo 'MyRepo' without .git suffix, got '{repo}'"
+
+    def test_malformed_ssh_url_returns_empty_strings(self) -> None:
+        """
+        Given an SSH URL containing ssh.dev.azure.com but missing project/repo
+        When parse_ado_url is called
+        Then all fields are empty strings (SSH regex fails)
+        """
+        # Given: a malformed SSH URL (missing project and repo segments)
+        url = "git@ssh.dev.azure.com:v3/OrgOnly"
+
+        # When: the URL is parsed
+        org, project, repo, pr_id = parse_ado_url(url)
+
+        # Then: all fields are empty (SSH regex requires org/project/repo)
+        assert org == "", f"Expected empty org for malformed SSH URL, got '{org}'"
+        assert project == "", f"Expected empty project for malformed SSH URL, got '{project}'"
+        assert repo == "", f"Expected empty repo for malformed SSH URL, got '{repo}'"
+        assert pr_id == "", f"Expected empty pr_id for malformed SSH URL, got '{pr_id}'"
 
     def test_unsupported_url_returns_empty_strings(self) -> None:
         """

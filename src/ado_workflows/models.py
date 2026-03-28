@@ -8,6 +8,7 @@ and :mod:`comments` modules.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -343,3 +344,80 @@ class PostingResult:
     failures: list[ActionableError]
     skipped: list[int]  # indices skipped (e.g., dry_run)
     dry_run: bool
+
+
+# ---------------------------------------------------------------------------
+# Rich comment posting types
+# ---------------------------------------------------------------------------
+
+
+class CommentSeverity(Enum):
+    """Severity levels for code review comments."""
+
+    INFO = "info"
+    SUGGESTION = "suggestion"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class CommentType(Enum):
+    """Semantic types for code review comments."""
+
+    GENERAL = "general"
+    LINE_COMMENT = "line"
+    FILE_COMMENT = "file"
+    SUGGESTION = "suggestion"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+
+
+@dataclass(frozen=True)
+class RichComment:
+    """
+    Structured code review comment with metadata for formatting and filtering.
+
+    Extends the information carried by :class:`CommentPayload` with title,
+    severity, type, suggested code, reasoning, business impact, and tags.
+    """
+
+    comment_id: str
+    title: str
+    content: str
+    comment_type: CommentType = CommentType.GENERAL
+    severity: CommentSeverity = CommentSeverity.INFO
+    file_path: str | None = None
+    line_number: int | None = None
+    suggested_code: str | None = None
+    reasoning: str | None = None
+    business_impact: str | None = None
+    tags: list[str] = field(default_factory=list[str])
+    status: str = "active"
+    parent_thread_id: int | None = None
+
+
+@dataclass(frozen=True)
+class PostedCommentDetail:
+    """Detail for a successfully posted rich comment."""
+
+    thread_id: int
+    comment_id: str
+    title: str
+    file_path: str | None
+    line_number: int | None
+
+
+@dataclass(frozen=True)
+class RichPostingResult:
+    """
+    Result of a rich comment posting operation.
+
+    Extends :class:`PostingResult` with self-praise filtering results
+    and per-comment detail.
+    """
+
+    posted: list[PostedCommentDetail]
+    failures: list[ActionableError]
+    skipped: list[int]
+    dry_run: bool
+    local_praise: list[RichComment]

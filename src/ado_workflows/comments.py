@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 
+from ado_workflows.formatting import CommentFormatter, format_comment
 from ado_workflows.iterations import get_latest_iteration_context
 from ado_workflows.models import (
     AuthorSample,
@@ -23,9 +24,13 @@ from ado_workflows.models import (
     CommentPayload,
     CommentSummary,
     IterationContext,
+    PostedCommentDetail,
     PostingResult,
     ResolveResult,
+    RichComment,
+    RichPostingResult,
 )
+from ado_workflows.praise import filter_self_praise
 
 if TYPE_CHECKING:
     from ado_workflows.client import AdoClient
@@ -514,3 +519,193 @@ def resolve_comments(
             errors.append(err)
 
     return ResolveResult(resolved=resolved, errors=errors, skipped=skipped)
+
+
+# ---------------------------------------------------------------------------
+# Rich comment posting
+# ---------------------------------------------------------------------------
+
+
+def _validate_rich_comment(comment: RichComment) -> ActionableError | None:
+    """Return an error if *comment* has structural problems, else ``None``."""
+    if not comment.title or not comment.title.strip():
+        return ActionableError.validation(
+            service="ado-workflows",
+            field_name="title",
+            reason=f"RichComment '{comment.comment_id}' has empty title.",
+        )
+    if not comment.content or not comment.content.strip():
+        return ActionableError.validation(
+            service="ado-workflows",
+            field_name="content",
+            reason=f"RichComment '{comment.comment_id}' has empty content.",
+        )
+    if comment.line_number is not None and comment.file_path is None:
+        return ActionableError.validation(
+            service="ado-workflows",
+            field_name="file_path",
+            reason=(
+                f"RichComment '{comment.comment_id}' has line_number={comment.line_number} "
+                "but no file_path."
+            ),
+            suggestion="Provide both file_path and line_number for positioned comments.",
+        )
+    return None
+
+
+def post_rich_comments(
+    client: AdoClient,
+    repository: str,
+    pr_id: int,
+    comments: list[RichComment],
+    project: str,
+    *,
+    dry_run: bool = False,
+    batch_size: int = 5,
+    filter_self_praise: bool = True,
+    formatter: CommentFormatter | None = None,
+) -> RichPostingResult:
+    """
+    Batch-post rich code review comments.
+
+    Formats, filters self-praise, and batch rate-limits.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        pr_id: Pull request ID.
+        comments: List of :class:`~models.RichComment` to post.
+        project: Azure DevOps project name or GUID.
+        dry_run: If ``True``, validate without posting.
+        batch_size: Number of comments to post per batch.
+        filter_self_praise: If ``True``, praise on own PRs is diverted.
+        formatter: Optional custom formatter; ``None`` uses the default.
+
+    Returns:
+        :class:`~models.RichPostingResult` with per-comment outcomes.
+
+    """
+    if not comments:
+        return RichPostingResult(
+            posted=[],
+            failures=[],
+            skipped=[],
+            dry_run=dry_run,
+            local_praise=[],
+        )
+
+    # --- self-praise filtering ---
+    local_praise: list[RichComment] = []
+    if filter_self_praise:
+        from ado_workflows.auth import get_current_user  # noqa: PLC0415
+        from ado_workflows.pr import get_pr_author  # noqa: PLC0415
+
+        try:
+            pr_author = get_pr_author(client, pr_id, project)
+            current_user = get_current_user(client)
+            comments, local_praise = _filter_self_praise(
+                comments,
+                pr_author,
+                current_user,
+            )
+        except Exception:
+            pass
+
+    # --- validation ---
+    valid: list[tuple[int, RichComment]] = []
+    failures: list[ActionableError] = []
+    for idx, comment in enumerate(comments):
+        err = _validate_rich_comment(comment)
+        if err is not None:
+            err.context = {"index": idx, "comment_id": comment.comment_id}
+            failures.append(err)
+        else:
+            valid.append((idx, comment))
+
+    if dry_run:
+        return RichPostingResult(
+            posted=[],
+            failures=failures,
+            skipped=[idx for idx, _ in valid],
+            dry_run=True,
+            local_praise=local_praise,
+        )
+
+    # --- iteration context (resolved once) ---
+    iter_ctx: IterationContext | None = None
+    has_positioned = any(c.file_path is not None for _, c in valid)
+    if has_positioned:
+        with contextlib.suppress(Exception):
+            iter_ctx = get_latest_iteration_context(client, repository, pr_id, project)
+
+    # --- post in batches ---
+    posted: list[PostedCommentDetail] = []
+
+    for batch_start in range(0, len(valid), batch_size):
+        batch = valid[batch_start : batch_start + batch_size]
+
+        for _idx, comment in batch:
+            formatted_content = format_comment(comment, formatter)
+
+            try:
+                if comment.parent_thread_id is not None:
+                    # Reply to existing thread
+                    reply_to_comment(
+                        client,
+                        repository,
+                        pr_id,
+                        comment.parent_thread_id,
+                        formatted_content,
+                        project,
+                    )
+                    posted.append(
+                        PostedCommentDetail(
+                            thread_id=comment.parent_thread_id,
+                            comment_id=comment.comment_id,
+                            title=comment.title,
+                            file_path=comment.file_path,
+                            line_number=comment.line_number,
+                        )
+                    )
+                else:
+                    # New thread
+                    thread_id = post_comment(
+                        client,
+                        repository,
+                        pr_id,
+                        formatted_content,
+                        project,
+                        status=comment.status,
+                        file_path=comment.file_path,
+                        line_number=comment.line_number,
+                        iteration_context=iter_ctx,
+                    )
+                    posted.append(
+                        PostedCommentDetail(
+                            thread_id=thread_id,
+                            comment_id=comment.comment_id,
+                            title=comment.title,
+                            file_path=comment.file_path,
+                            line_number=comment.line_number,
+                        )
+                    )
+            except Exception as exc:
+                err = ActionableError.internal(
+                    service="ado-workflows",
+                    operation="post_rich_comment",
+                    raw_error=str(exc),
+                )
+                err.context = {"comment_id": comment.comment_id}
+                failures.append(err)
+
+    return RichPostingResult(
+        posted=posted,
+        failures=failures,
+        skipped=[],
+        dry_run=False,
+        local_praise=local_praise,
+    )
+
+
+# Private alias to avoid shadowing the parameter name.
+_filter_self_praise = filter_self_praise
