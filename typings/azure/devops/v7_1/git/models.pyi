@@ -105,6 +105,7 @@ class IdentityRefWithVote:
     id: str | None
     vote: int | None
     is_container: bool | None
+    is_required: bool | None
     voted_for: list[_VotedForRef] | None
     def __init__(
         self,
@@ -114,6 +115,7 @@ class IdentityRefWithVote:
         id: str | None = None,
         vote: int | None = None,
         is_container: bool | None = None,
+        is_required: bool | None = None,
         voted_for: list[_VotedForRef] | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -151,6 +153,9 @@ class GitPullRequest:
     reviewers: list[IdentityRefWithVote] | None
     description: str | None
     last_merge_source_commit: GitCommitRef | None
+    labels: list[WebApiTagDefinition] | None
+    work_item_refs: list[ResourceRef] | None
+    completion_options: GitPullRequestCompletionOptions | None
     def __init__(
         self,
         *,
@@ -160,6 +165,7 @@ class GitPullRequest:
         description: str | None = None,
         is_draft: bool | None = None,
         status: str | None = None,
+        completion_options: GitPullRequestCompletionOptions | None = None,
         **kwargs: Any,
     ) -> None: ...
 
@@ -232,3 +238,45 @@ class GitVersionDescriptor:
         version: str | None = None,
         version_type: str | None = None,
     ) -> None: ...
+
+
+class GitPullRequestCompletionOptions:
+    merge_strategy: str | None
+    delete_source_branch: bool | None
+    transition_work_items: bool | None
+    merge_commit_message: str | None
+    bypass_policy: bool | None
+    bypass_reason: str | None
+    def __init__(
+        self,
+        *,
+        merge_strategy: str | None = None,
+        delete_source_branch: bool | None = None,
+        transition_work_items: bool | None = None,
+        merge_commit_message: str | None = None,
+        bypass_policy: bool | None = None,
+        bypass_reason: str | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
+
+class WebApiTagDefinition:
+    id: str
+    name: str
+    active: bool | None
+    url: str | None
+
+
+class WebApiCreateTagRequestData:
+    name: str
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
+
+class ResourceRef:
+    id: str
+    url: str

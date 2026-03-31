@@ -13,6 +13,10 @@ from azure.devops.v7_1.git.models import (
     GitPullRequestIterationChanges,
     GitPullRequestSearchCriteria,
     GitVersionDescriptor,
+    IdentityRefWithVote,
+    ResourceRef,
+    WebApiCreateTagRequestData,
+    WebApiTagDefinition,
 )
 
 class GitClient:
@@ -73,6 +77,77 @@ class GitClient:
         repository_id: str,
         project: str | None = None,
     ) -> GitPullRequest: ...
+
+    def update_pull_request(
+        self,
+        git_pull_request_to_update: GitPullRequest,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+    ) -> GitPullRequest: ...
+
+    def get_pull_request(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+        include_commits: bool | None = None,
+        include_work_item_refs: bool | None = None,
+    ) -> GitPullRequest: ...
+
+    def create_pull_request_reviewer(
+        self,
+        reviewer: IdentityRefWithVote,
+        repository_id: str,
+        pull_request_id: int,
+        reviewer_id: str,
+        project: str | None = None,
+    ) -> IdentityRefWithVote: ...
+
+    def delete_pull_request_reviewer(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        reviewer_id: str,
+        project: str | None = None,
+    ) -> None: ...
+
+    def get_pull_request_reviewers(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+    ) -> list[IdentityRefWithVote]: ...
+
+    def create_pull_request_label(
+        self,
+        label: WebApiCreateTagRequestData,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+    ) -> WebApiTagDefinition: ...
+
+    def delete_pull_request_labels(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        label_id_or_name: str,
+        project: str | None = None,
+    ) -> None: ...
+
+    def get_pull_request_labels(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+    ) -> list[WebApiTagDefinition]: ...
+
+    def get_pull_request_work_item_refs(
+        self,
+        repository_id: str,
+        pull_request_id: int,
+        project: str | None = None,
+    ) -> list[ResourceRef]: ...
 
     def get_pull_request_commits(
         self,

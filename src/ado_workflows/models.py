@@ -421,3 +421,66 @@ class RichPostingResult:
     skipped: list[int]
     dry_run: bool
     local_praise: list[RichComment]
+
+
+# ---------------------------------------------------------------------------
+# PR lifecycle types (FR2)
+# ---------------------------------------------------------------------------
+
+
+class MergeStrategy(Enum):
+    """Merge strategies for PR completion."""
+
+    NO_FAST_FORWARD = "noFastForward"
+    SQUASH = "squash"
+    REBASE = "rebase"
+    REBASE_MERGE = "rebaseMerge"
+
+
+@dataclass(frozen=True)
+class ReviewerDetail:
+    """Reviewer identity on a PR."""
+
+    id: str  # GUID
+    display_name: str
+    unique_name: str  # email
+    vote: int
+    vote_text: str
+    is_required: bool
+    is_container: bool  # True for team/group reviewers
+
+
+@dataclass(frozen=True)
+class LabelDetail:
+    """Label/tag on a PR."""
+
+    id: str
+    name: str
+
+
+@dataclass(frozen=True)
+class WorkItemRef:
+    """Lightweight reference to a linked work item."""
+
+    id: str  # numeric string, e.g. "37290513"
+    url: str  # full REST URL
+
+
+@dataclass(frozen=True)
+class PullRequestDetail:
+    """Read result for a single PR — richer than CreatedPR."""
+
+    pr_id: int
+    url: str
+    title: str
+    description: str | None
+    source_branch: str
+    target_branch: str
+    status: str  # "active" | "completed" | "abandoned"
+    is_draft: bool
+    created_by: str  # display name
+    creation_date: str  # ISO-8601
+    merge_status: str  # "succeeded" | "conflicts" | "queued" | ...
+    reviewers: list[ReviewerDetail]
+    labels: list[LabelDetail]
+    work_item_refs: list[WorkItemRef]
