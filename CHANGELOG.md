@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-03-31)
+
+### Chores
+
+- Update uv.lock
+  ([`4721195`](https://github.com/grimlor/ado-workflows/commit/472119588233b8069373a9be2657a6fb9728bbed))
+
+### Features
+
+- PR lifecycle operations — get, update, complete, reviewers, labels
+  ([`340e0cb`](https://github.com/grimlor/ado-workflows/commit/340e0cba45bb6099c83b382d7d4c0f9d4e01994d))
+
+
 ## v0.4.1 (2026-03-31)
 
 ### Bug Fixes
