@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.1 (2026-03-31)
+
+### Bug Fixes
+
+- **ci**: Install uv via pipx instead of curl in .envrc
+  ([`42af459`](https://github.com/grimlor/ado-workflows/commit/42af459c35fc732701363875bc389684bf6a5aa4))
+
+
 ## v0.4.0 (2026-03-28)
 
 ### Continuous Integration
