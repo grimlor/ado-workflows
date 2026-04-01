@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-04-01)
+
+### Features
+
+- **models**: Add DOMAIN value to CommentType enum
+  ([`7759c57`](https://github.com/grimlor/ado-workflows/commit/7759c573fbce76f65e7d506b297f2ff764edc78b))
+
+
 ## v0.5.0 (2026-03-31)
 
 ### Chores
