@@ -370,6 +370,7 @@ class CommentType(Enum):
     SUGGESTION = "suggestion"
     SECURITY = "security"
     PERFORMANCE = "performance"
+    DOMAIN = "domain"
 
 
 @dataclass(frozen=True)
