@@ -39,7 +39,7 @@ jobs:
         run: uv run pyright src/ tests/
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=ado_workflows --cov-report=term-missing --cov-report=json
+        run: uv run pytest --cov=ado_workflows --cov-branch --cov-report=term-missing --cov-report=json
 
       - name: Extract coverage percentage
         id: coverage
