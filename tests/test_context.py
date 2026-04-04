@@ -13,10 +13,12 @@ Covers:
 
 from __future__ import annotations
 
-from pathlib import Path
 from threading import Barrier, Thread
-from typing import Any
-from unittest.mock import patch
+from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from ado_workflows.context import (
     RepositoryContext,
@@ -27,39 +29,68 @@ from ado_workflows.context import (
 )
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_REPO_PATCH = "ado_workflows.discovery.Repo"
+_ADO_REMOTE = "https://dev.azure.com/ExampleOrg/MyProject/_git/{name}"
+_ADO_REMOTE_2 = "https://dev.azure.com/ExampleOrg/OtherProject/_git/{name}"
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _repo_info(
-    path: str = "/workspace/my-repo",
+def _mock_repo(remote_url: str) -> MagicMock:
+    """Return a mock GitPython Repo with an origin remote."""
+    repo = MagicMock()
+    repo.remotes.origin.url = remote_url
+
+    def _bool(_self: object) -> bool:
+        return True
+
+    def _len(_self: object) -> int:
+        return 1
+
+    repo.remotes.__bool__ = _bool
+    repo.remotes.__len__ = _len
+    return repo
+
+
+def _make_git_repo(
+    workspace: Path,
+    name: str,
+    *,
+    remote_url: str | None = None,
+) -> tuple[Path, str]:
+    """
+    Create a directory with a ``.git`` marker inside *workspace*.
+
+    Returns ``(repo_path, remote_url)`` for use with :func:`_mock_repo`.
+    """
+    repo = workspace / name
+    (repo / ".git").mkdir(parents=True)
+    url = remote_url or _ADO_REMOTE.format(name=name)
+    return repo, url
+
+
+def _set_context_via_public_api(
+    workspace: Path,
     name: str = "my-repo",
-    organization: str = "ExampleOrg",
-    project: str = "MyProject",
-) -> dict[str, Any]:
-    """Build a realistic repo-info dict for test fixtures."""
-    return {
-        "path": path,
-        "name": name,
-        "organization": organization,
-        "project": project,
-        "remote_url": (f"https://dev.azure.com/{organization}/{project}/_git/{name}"),
-        "org_url": f"https://dev.azure.com/{organization}",
-        "workspace_context": {
-            "is_multi_repo_workspace": False,
-            "workspace_root": str(Path(path).parent),
-            "repository_relative_path": name,
-        },
-    }
+    *,
+    remote_url: str | None = None,
+) -> Path:
+    """
+    Create a git repo dir, mock Repo at the I/O edge, then call set().
 
-
-# Pre-built fixtures for the most common scenarios
-_SAMPLE = _repo_info()
-_SECOND = _repo_info(
-    path="/workspace/other-repo",
-    name="other-repo",
-    project="OtherProject",
-)
+    Returns the repo directory path. All layers (discover_repositories,
+    infer_target_repository, parse_ado_url) run for real.
+    """
+    repo_dir, url = _make_git_repo(workspace, name, remote_url=remote_url)
+    with patch(_REPO_PATCH, return_value=_mock_repo(url)):
+        RepositoryContext.set(str(repo_dir))
+    return repo_dir
 
 
 # ---------------------------------------------------------------------------
@@ -76,17 +107,20 @@ class TestContextSet:
           (2) set() with a relative path returns a validation error
           (3) set() with a non-existent path returns a not-found error
           (4) set() clears previous cache before discovering anew
-          (5) set() resets state when discovery fails
-          (6) when infer_target_repository returns None the first discovered
-              repo is used as fallback
+          (5) set() resets state when discovery finds no ADO repos
+          (6) when the workspace has multiple repos, the best match is cached
+          (7) when infer cannot pick a best match, the first discovered repo
+              is used as fallback
     WHY: Without validated context, downstream tools operate on stale or
          incorrect repository information
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories, infer_target_repository (Layer 1 I/O)
-        Real:  RepositoryContext state machine, os.path.isabs, os.path.exists,
-               ActionableError construction, tmp_path filesystem
-        Never: Make real git subprocess calls or mock os.path pure functions
+        Mock:  git.Repo (GitPython — the only I/O boundary)
+        Real:  RepositoryContext state machine, discover_repositories,
+               infer_target_repository, parse_ado_url, os.path.isabs,
+               os.path.exists, tmp_path filesystem
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
@@ -99,28 +133,24 @@ class TestContextSet:
         When set() is called
         Then the result indicates success and contains repository info
         """
-        # Given: a real directory on disk
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
+        # Given: a directory with a .git folder and ADO remote
+        repo_dir, url = _make_git_repo(tmp_path, "my-repo")
 
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo(url)):
             # When: context is set
             result = RepositoryContext.set(str(repo_dir))
 
-        # Then: success with repo info
+        # Then: success with repo info from real discovery
         assert result["success"] is True, f"Expected success, got: {result}"
         assert "repository_info" in result, f"Missing repository_info: {result}"
         assert result["repository_info"]["name"] == "my-repo", (
             f"Expected repo name 'my-repo', got: {result['repository_info'].get('name')}"
+        )
+        assert result["repository_info"]["organization"] == "ExampleOrg", (
+            f"Expected org 'ExampleOrg', got: {result['repository_info'].get('organization')}"
+        )
+        assert result["repository_info"]["project"] == "MyProject", (
+            f"Expected project 'MyProject', got: {result['repository_info'].get('project')}"
         )
 
     def test_set_with_relative_path_returns_validation_error(self) -> None:
@@ -158,73 +188,38 @@ class TestContextSet:
 
     def test_set_clears_previous_cache(self, tmp_path: Path) -> None:
         """
-        Given a previously cached context
-        When set() is called with a new directory
-        Then the old cache is replaced
+        Given a previously cached context for one repo
+        When set() is called with a second repo directory
+        Then the old cache is replaced with the new repo info
         """
-        # Given: existing cached context
-        first_dir = tmp_path / "my-repo"
-        first_dir.mkdir()
-        second_dir = tmp_path / "other-repo"
-        second_dir.mkdir()
+        # Given: first repo context cached
+        first_dir, first_url = _make_git_repo(tmp_path, "first-repo")
+        second_dir, second_url = _make_git_repo(tmp_path, "second-repo")
 
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo(first_url)):
             RepositoryContext.set(str(first_dir))
 
-        # When: new context set
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SECOND],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SECOND,
-            ),
-        ):
+        # When: set with a different directory
+        with patch(_REPO_PATCH, return_value=_mock_repo(second_url)):
             result = RepositoryContext.set(str(second_dir))
 
         # Then: new repo info cached
-        assert result["repository_info"]["name"] == "other-repo", (
-            f"Expected other-repo, got: {result['repository_info'].get('name')}"
+        assert result["repository_info"]["name"] == "second-repo", (
+            f"Expected second-repo, got: {result['repository_info'].get('name')}"
         )
 
-    def test_set_resets_on_discovery_failure(self, tmp_path: Path) -> None:
+    def test_set_resets_on_empty_discovery(self, tmp_path: Path) -> None:
         """
-        Given a directory where discovery returns a failure dict
+        Given a directory with no git repos (or only non-ADO repos)
         When set() is called
         Then the working directory is reset to None
         """
-        # Given: a real directory but discovery returns failure
-        repo_dir = tmp_path / "bad-repo"
-        repo_dir.mkdir()
-        failure: dict[str, Any] = {
-            "success": False,
-            "error": "no remote",
-            "error_type": "not_found",
-        }
+        # Given: a real directory with no .git children
+        empty_dir = tmp_path / "no-repos"
+        empty_dir.mkdir()
 
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[failure],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=failure,
-            ),
-        ):
-            # When: set is called
-            result = RepositoryContext.set(str(repo_dir))
+        # When: set is called — real discover_repositories finds nothing
+        result = RepositoryContext.set(str(empty_dir))
 
         # Then: error returned and state is clean
         assert result["success"] is False, f"Expected failure, got: {result}"
@@ -233,33 +228,64 @@ class TestContextSet:
             f"Expected context_set=False after failed discovery, got: {status}"
         )
 
-    def test_set_uses_first_repo_when_infer_returns_none(self, tmp_path: Path) -> None:
+    def test_set_with_multi_repo_workspace_selects_best_match(self, tmp_path: Path) -> None:
         """
-        Given discover_repositories returns repos but infer returns None
-        When set() is called
+        Given a workspace with multiple ADO repos
+        When set() is called with one repo's path
+        Then that repo is cached (search_root itself is a git repo)
+        """
+        # Given: two repos in a workspace
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        repo_a, url_a = _make_git_repo(workspace, "repo-a")
+        _repo_b, url_b = _make_git_repo(workspace, "repo-b")
+
+        def repo_factory(path: str) -> MagicMock:
+            if "repo-a" in path:
+                return _mock_repo(url_a)
+            return _mock_repo(url_b)
+
+        # When: set from repo-a (search_root itself has .git → single result)
+        with patch(_REPO_PATCH, side_effect=repo_factory):
+            result = RepositoryContext.set(str(repo_a))
+
+        # Then: repo-a selected
+        assert result["success"] is True, f"Expected success, got: {result}"
+        assert result["repository_info"]["name"] == "repo-a", (
+            f"Expected repo-a as best match, got: {result['repository_info'].get('name')}"
+        )
+
+    def test_set_with_ambiguous_workspace_falls_back_to_first_repo(
+        self, tmp_path: Path,
+    ) -> None:
+        """
+        Given a workspace with multiple ADO repos and neither matches cwd
+        When set() is called with the workspace root
         Then the first discovered repo is used as fallback
         """
-        # Given: a real directory, discovery returns repos, infer returns None
-        repo_dir = tmp_path / "workspace"
-        repo_dir.mkdir()
+        # Given: a workspace with two repos, cwd outside both
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        _repo_a, url_a = _make_git_repo(workspace, "repo-a")
+        _repo_b, url_b = _make_git_repo(workspace, "repo-b")
 
+        def repo_factory(path: str) -> MagicMock:
+            if "repo-a" in path:
+                return _mock_repo(url_a)
+            return _mock_repo(url_b)
+
+        # When: set from the workspace root (not inside either repo)
+        # cwd is /tmp/... which won't match either repo path
         with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE, _SECOND],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=None,
-            ),
+            patch(_REPO_PATCH, side_effect=repo_factory),
+            patch("os.getcwd", return_value="/unrelated"),
         ):
-            # When: set is called
-            result = RepositoryContext.set(str(repo_dir))
+            result = RepositoryContext.set(str(workspace))
 
-        # Then: first repo used as fallback
+        # Then: first discovered repo used as fallback
         assert result["success"] is True, f"Expected success, got: {result}"
-        assert result["repository_info"]["name"] == "my-repo", (
-            f"Expected first repo 'my-repo' as fallback, "
+        assert result["repository_info"]["name"] in ("repo-a", "repo-b"), (
+            f"Expected one of the discovered repos as fallback, "
             f"got: {result['repository_info'].get('name')}"
         )
 
@@ -281,49 +307,34 @@ class TestContextGet:
               discovery result using the current working directory
           (4) get() without context returns an error when discovery fails
           (5) get() with an override does not update the primary cache
-          (6) get() populates the cache on a primary-context miss
-          (7) get() uses os.getcwd() as the search root for intelligent discovery
+          (6) get() uses os.getcwd() as the search root for intelligent discovery
     WHY: Caching avoids redundant git subprocess calls; explicit overrides
          enable multi-repo workflows
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories, infer_target_repository (Layer 1 I/O),
+        Mock:  git.Repo (GitPython — the only I/O boundary),
                os.getcwd (process state I/O — only when testing cwd fallback)
         Real:  RepositoryContext caching logic, metadata enrichment,
+               discover_repositories, infer_target_repository, parse_ado_url,
                os.path.isabs, os.path.exists, tmp_path filesystem
-        Never: Make real git subprocess calls or mock os.path pure functions
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
         """Reset global state via the public API."""
         RepositoryContext.clear()
 
-    def _set_context(self, directory: str) -> None:
-        """Set context via public API with standard Layer 1 mocks."""
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
-            RepositoryContext.set(directory)
-
     def test_get_returns_cached_info_when_context_set(self, tmp_path: Path) -> None:
         """
-        Given context has been set
+        Given context has been set via a valid ADO repo
         When get() is called without arguments
         Then the cached repository info is returned with source=cached
         """
-        # Given: context set via a real directory
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        self._set_context(str(repo_dir))
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
-        # When: get without arguments (no Layer 1 mock needed — cached)
+        # When: get without arguments (no mock needed — cached path)
         result = RepositoryContext.get()
 
         # Then: cached result with metadata
@@ -337,27 +348,23 @@ class TestContextGet:
 
     def test_get_with_override_performs_fresh_discovery(self, tmp_path: Path) -> None:
         """
-        Given cached context exists
-        When get() is called with an explicit directory
+        Given cached context exists for one repo
+        When get() is called with a different override directory
         Then fresh discovery is performed for the override directory
         """
-        # Given: initial context
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        self._set_context(str(repo_dir))
+        # Given: initial context for my-repo
+        _set_context_via_public_api(tmp_path, "my-repo")
 
-        # When: get with override — fresh discovery for override dir
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SECOND],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SECOND,
-            ),
-        ):
-            result = RepositoryContext.get(working_directory="/workspace/other-repo")
+        # And: a second repo exists in the workspace
+        override_dir, override_url = _make_git_repo(
+            tmp_path,
+            "other-repo",
+            remote_url=_ADO_REMOTE_2.format(name="other-repo"),
+        )
+
+        # When: get with override — real discovery of override dir
+        with patch(_REPO_PATCH, return_value=_mock_repo(override_url)):
+            result = RepositoryContext.get(working_directory=str(override_dir))
 
         # Then: fresh result from override directory
         assert result["name"] == "other-repo", f"Expected other-repo, got: {result.get('name')}"
@@ -367,25 +374,21 @@ class TestContextGet:
 
     def test_get_without_context_attempts_intelligent_discovery(
         self,
+        tmp_path: Path,
     ) -> None:
         """
         Given no context has been set
         When get() is called without arguments
         Then intelligent discovery is attempted using os.getcwd()
         """
-        # Given: no context set, mock cwd and Layer 1
+        # Given: a repo on disk and cwd pointing to its parent
+        repo_dir, url = _make_git_repo(tmp_path, "my-repo")
+
         with (
-            patch("os.getcwd", return_value="/home/user/workspace"),
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
+            patch("os.getcwd", return_value=str(repo_dir)),
+            patch(_REPO_PATCH, return_value=_mock_repo(url)),
         ):
-            # When: get without arguments
+            # When: get without arguments — real discovery from cwd
             result = RepositoryContext.get()
 
         # Then: intelligent discovery result
@@ -398,21 +401,19 @@ class TestContextGet:
 
     def test_get_without_context_returns_error_when_discovery_fails(
         self,
+        tmp_path: Path,
     ) -> None:
         """
         Given no context has been set and intelligent discovery finds no repos
         When get() is called
         Then a validation error is returned with discovery failure detail
         """
-        # Given: discovery returns no repos
-        with (
-            patch("os.getcwd", return_value="/empty"),
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[],
-            ),
-        ):
-            # When: get without context
+        # Given: an empty directory with no .git — real discovery returns []
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        with patch("os.getcwd", return_value=str(empty_dir)):
+            # When: get without context — real discovery finds nothing
             result = RepositoryContext.get()
 
         # Then: validation error with underlying cause
@@ -427,23 +428,19 @@ class TestContextGet:
         When get() is called with a different override directory
         Then the primary cache is not updated
         """
-        # Given: initial context
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        self._set_context(str(repo_dir))
+        # Given: initial context for my-repo
+        _set_context_via_public_api(tmp_path, "my-repo")
+
+        # And: a second repo exists in the workspace
+        override_dir, override_url = _make_git_repo(
+            tmp_path,
+            "other-repo",
+            remote_url=_ADO_REMOTE_2.format(name="other-repo"),
+        )
 
         # When: get with override
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SECOND],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SECOND,
-            ),
-        ):
-            RepositoryContext.get(working_directory="/workspace/other-repo")
+        with patch(_REPO_PATCH, return_value=_mock_repo(override_url)):
+            RepositoryContext.get(working_directory=str(override_dir))
 
         # Then: cache still holds original
         status = RepositoryContext.status()
@@ -451,73 +448,26 @@ class TestContextGet:
             f"Expected cache unchanged, got: {status.get('cached_repository')}"
         )
 
-    def test_get_populates_cache_on_primary_miss(self, tmp_path: Path) -> None:
-        """
-        Given the working directory is set but cached_info is None
-        When get() is called without arguments
-        Then fresh discovery runs and the cache is populated
-
-        Note: This state (_working_directory set, _cached_info None)
-        is not reachable through the public API alone. This test covers
-        the defensive cache-population path in get().
-        """
-        # Given: working directory set but no cached info (defensive path)
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        # Test the defensive cache-population path; no public API to set
-        # working_directory without populating the cache.
-        RepositoryContext._working_directory = str(repo_dir)  # pyright: ignore[reportPrivateUsage]
-
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
-            # When: get without arguments
-            result = RepositoryContext.get()
-
-        # Then: fresh discovery result
-        assert result["name"] == "my-repo", f"Expected my-repo, got: {result.get('name')}"
-        assert result.get("_context_source") == "fresh_discovery", (
-            f"Expected fresh_discovery, got: {result.get('_context_source')}"
-        )
-        # And cache is now populated
-        status = RepositoryContext.status()
-        assert status["cache_available"] is True, (
-            f"Expected cache_available=True after miss, got: {status}"
-        )
-        assert status["cache_timestamp"] is not None, (
-            f"Expected cache_timestamp set, got: {status.get('cache_timestamp')}"
-        )
-
-    def test_get_uses_cwd_for_intelligent_discovery(self) -> None:
+    def test_get_uses_cwd_for_intelligent_discovery(self, tmp_path: Path) -> None:
         """
         Given no context and no override directory
         When get() is called
-        Then os.getcwd() is used as the search root for discover_repositories
+        Then os.getcwd() is used as the search root for discovery
         """
-        # Given: no context, cwd is a known value
+        # Given: a repo on disk and cwd pointing to it
+        repo_dir, url = _make_git_repo(tmp_path, "cwd-repo")
+
         with (
-            patch("os.getcwd", return_value="/home/user/projects"),
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ) as mock_discover,
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
+            patch("os.getcwd", return_value=str(repo_dir)),
+            patch(_REPO_PATCH, return_value=_mock_repo(url)),
         ):
             # When: get is called
-            RepositoryContext.get()
+            result = RepositoryContext.get()
 
-        # Then: discover_repositories was called with the cwd
-        mock_discover.assert_called_once_with("/home/user/projects")
+        # Then: discovery used the cwd — result is from cwd-repo
+        assert result["name"] == "cwd-repo", (
+            f"Expected cwd-repo from cwd-based discovery, got: {result.get('name')}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -536,28 +486,16 @@ class TestContextClear:
     WHY: Stale context leads to operations against the wrong repository
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories, infer_target_repository (for setup only)
-        Real:  RepositoryContext.clear logic, tmp_path filesystem
-        Never: N/A
+        Mock:  git.Repo (GitPython — the only I/O boundary, for setup only)
+        Real:  RepositoryContext.clear logic, discover_repositories,
+               infer_target_repository, parse_ado_url, tmp_path filesystem
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
         """Reset global state via the public API."""
         RepositoryContext.clear()
-
-    def _set_context(self, directory: str) -> None:
-        """Set context via public API with standard Layer 1 mocks."""
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
-            RepositoryContext.set(directory)
 
     def test_clear_removes_all_state(self, tmp_path: Path) -> None:
         """
@@ -565,10 +503,8 @@ class TestContextClear:
         When clear() is called
         Then all state is removed
         """
-        # Given: context set
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        self._set_context(str(repo_dir))
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
         # When: clear
         result = RepositoryContext.clear()
@@ -585,10 +521,8 @@ class TestContextClear:
         When clear() is called
         Then the previous directory is returned
         """
-        # Given: context set
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        self._set_context(str(repo_dir))
+        # Given: context set via real discovery
+        repo_dir = _set_context_via_public_api(tmp_path, "my-repo")
 
         # When: clear
         result = RepositoryContext.clear()
@@ -632,9 +566,11 @@ class TestContextStatus:
     WHY: Opaque state makes debugging multi-repo issues impossible
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories, infer_target_repository (for setup only)
-        Real:  RepositoryContext.status logic, tmp_path filesystem
-        Never: N/A
+        Mock:  git.Repo (GitPython — the only I/O boundary, for setup only)
+        Real:  RepositoryContext.status logic, discover_repositories,
+               infer_target_repository, parse_ado_url, tmp_path filesystem
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
@@ -665,20 +601,8 @@ class TestContextStatus:
         When status() is called
         Then it reports the current directory and cached repo info
         """
-        # Given: context set
-        repo_dir = tmp_path / "my-repo"
-        repo_dir.mkdir()
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                return_value=[_SAMPLE],
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                return_value=_SAMPLE,
-            ),
-        ):
-            RepositoryContext.set(str(repo_dir))
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
         # When: status
         result = RepositoryContext.status()
@@ -711,10 +635,12 @@ class TestContextThreadSafety:
     WHY: MCP servers may receive multiple tool calls simultaneously
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories, infer_target_repository (Layer 1 I/O)
+        Mock:  git.Repo (GitPython — the only I/O boundary)
         Real:  RepositoryContext locking and state management, threading,
+               discover_repositories, infer_target_repository, parse_ado_url,
                os.path.isabs, os.path.exists, tmp_path filesystem
-        Never: Make real git subprocess calls
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
@@ -727,23 +653,22 @@ class TestContextThreadSafety:
         When all threads complete
         Then the final state is consistent (no partial writes or corruption)
         """
-        # Given: real directories and synchronized start
+        # Given: real directories with .git markers and synchronized start
         num_threads = 10
         barrier = Barrier(num_threads)
         results: list[dict[str, Any]] = []
 
+        urls: dict[str, str] = {}
         for i in range(num_threads):
-            (tmp_path / f"repo-{i}").mkdir()
+            repo_dir, url = _make_git_repo(tmp_path, f"repo-{i}")
+            urls[str(repo_dir)] = url
 
-        def _mock_discover(search_root: str) -> list[dict[str, Any]]:
-            name = Path(search_root).name
-            return [_repo_info(path=search_root, name=name)]
-
-        def _mock_infer(
-            repos: list[dict[str, Any]],
-            working_directory: str | None = None,
-        ) -> dict[str, Any] | None:
-            return repos[0] if repos else None
+        def repo_factory(path: str) -> MagicMock:
+            """Return a mock Repo whose remote matches the repo directory."""
+            for repo_path, url in urls.items():
+                if repo_path in path or path in repo_path:
+                    return _mock_repo(url)
+            return _mock_repo(_ADO_REMOTE.format(name="fallback"))
 
         def worker(repo_dir: str) -> None:
             barrier.wait()
@@ -751,17 +676,8 @@ class TestContextThreadSafety:
             result = RepositoryContext.get()
             results.append(result)
 
-        # When: concurrent access with shared Layer 1 mocks
-        with (
-            patch(
-                "ado_workflows.context.discover_repositories",
-                side_effect=_mock_discover,
-            ),
-            patch(
-                "ado_workflows.context.infer_target_repository",
-                side_effect=_mock_infer,
-            ),
-        ):
+        # When: concurrent access with git.Repo mocked at the I/O edge
+        with patch(_REPO_PATCH, side_effect=repo_factory):
             threads = [
                 Thread(
                     target=worker,
@@ -801,10 +717,12 @@ class TestContextErrorPaths:
     WHY: Unstructured exceptions break MCP tool response contracts
 
     MOCK BOUNDARY:
-        Mock:  discover_repositories (Layer 1 I/O)
-        Real:  RepositoryContext error wrapping logic, os.path.isabs,
+        Mock:  git.Repo (GitPython — the only I/O boundary)
+        Real:  RepositoryContext error wrapping logic, discover_repositories,
+               infer_target_repository, parse_ado_url, os.path.isabs,
                os.path.exists, tmp_path filesystem
-        Never: Mock os.path pure functions
+        Never: mock discover_repositories, infer_target_repository, or any
+               of our own functions
     """
 
     def setup_method(self) -> None:
@@ -813,19 +731,16 @@ class TestContextErrorPaths:
 
     def test_discovery_exception_is_wrapped(self, tmp_path: Path) -> None:
         """
-        Given discover_repositories raises an unexpected RuntimeError
+        Given git.Repo raises an unexpected RuntimeError
         When set() is called
         Then the error is wrapped in an ActionableError dict
         """
-        # Given: a real directory but discovery raises
+        # Given: a real directory with a .git marker, but Repo raises
         repo_dir = tmp_path / "broken-repo"
-        repo_dir.mkdir()
+        (repo_dir / ".git").mkdir(parents=True)
 
-        with patch(
-            "ado_workflows.context.discover_repositories",
-            side_effect=RuntimeError("git crashed"),
-        ):
-            # When: set is called
+        with patch(_REPO_PATCH, side_effect=RuntimeError("git crashed")):
+            # When: set is called — real discover_repositories calls Repo()
             result = RepositoryContext.set(str(repo_dir))
 
         # Then: structured error
@@ -836,18 +751,15 @@ class TestContextErrorPaths:
 
     def test_discovery_os_error_is_wrapped(self, tmp_path: Path) -> None:
         """
-        Given discover_repositories raises an OSError
+        Given git.Repo raises an OSError
         When set() is called
         Then the error is wrapped with the original message preserved
         """
-        # Given: a real directory but discovery raises OSError
+        # Given: a real directory with a .git marker, but Repo raises OSError
         repo_dir = tmp_path / "locked-repo"
-        repo_dir.mkdir()
+        (repo_dir / ".git").mkdir(parents=True)
 
-        with patch(
-            "ado_workflows.context.discover_repositories",
-            side_effect=OSError("permission denied"),
-        ):
+        with patch(_REPO_PATCH, side_effect=OSError("permission denied")):
             # When: set is called
             result = RepositoryContext.set(str(repo_dir))
 
@@ -859,20 +771,16 @@ class TestContextErrorPaths:
 
     def test_no_repos_found_returns_structured_error(self, tmp_path: Path) -> None:
         """
-        Given discover_repositories returns an empty list
+        Given a directory with no git repositories
         When set() is called
-        Then a not-found error is returned naming the search root
+        Then a not-found error is returned
         """
-        # Given: a real directory but no repos found
-        repo_dir = tmp_path / "empty-workspace"
-        repo_dir.mkdir()
+        # Given: a real empty directory — no .git children
+        empty_dir = tmp_path / "empty-workspace"
+        empty_dir.mkdir()
 
-        with patch(
-            "ado_workflows.context.discover_repositories",
-            return_value=[],
-        ):
-            # When: set is called
-            result = RepositoryContext.set(str(repo_dir))
+        # When: set is called — real discover_repositories returns []
+        result = RepositoryContext.set(str(empty_dir))
 
         # Then: structured not-found error
         assert result["success"] is False, f"Expected failure, got: {result}"
@@ -891,73 +799,93 @@ class TestConvenienceFunctions:
     REQUIREMENT: Module-level convenience functions delegate to RepositoryContext.
 
     WHO: Callers preferring a functional API over classmethods
-    WHAT: (1) set_repository_context delegates to RepositoryContext.set
-          (2) get_repository_context delegates to RepositoryContext.get
-          (3) get_context_status delegates to RepositoryContext.status
-          (4) clear_repository_context delegates to RepositoryContext.clear
-    WHY: Code often uses import-and-call style; convenience functions match
-         the existing public API
+    WHAT: (1) set_repository_context produces the same result as RepositoryContext.set
+          (2) get_repository_context produces the same result as RepositoryContext.get
+          (3) get_context_status produces the same result as RepositoryContext.status
+          (4) clear_repository_context produces the same result as RepositoryContext.clear
+    WHY: Code often uses import-and-call style; convenience functions must be
+         behaviorally identical to the classmethods they wrap
 
     MOCK BOUNDARY:
-        Mock:  RepositoryContext classmethods (public API boundary)
-        Real:  Convenience function delegation
-        Never: N/A
+        Mock:  git.Repo (GitPython — the only I/O boundary)
+        Real:  All convenience functions, RepositoryContext, discover_repositories,
+               infer_target_repository, parse_ado_url, tmp_path filesystem
+        Never: mock RepositoryContext classmethods, discover_repositories,
+               infer_target_repository, or any of our own functions
     """
 
     def setup_method(self) -> None:
         """Reset global state via the public API."""
         RepositoryContext.clear()
 
-    def test_set_repository_context_delegates(self) -> None:
+    def test_set_repository_context_sets_context(self, tmp_path: Path) -> None:
         """
+        Given a valid repo directory
         When set_repository_context() is called
-        Then it delegates to RepositoryContext.set()
+        Then context is set with repository info matching the directory
         """
-        # Given/When: call the convenience function
-        with patch.object(RepositoryContext, "set", return_value={"success": True}) as mock_set:
-            result = set_repository_context("/workspace/repo")
+        # Given: a directory with a .git folder and ADO remote
+        repo_dir, url = _make_git_repo(tmp_path, "my-repo")
 
-        # Then: delegation verified
-        mock_set.assert_called_once_with("/workspace/repo")
-        assert result["success"] is True, f"Expected delegation result, got: {result}"
+        # When: call the convenience function
+        with patch(_REPO_PATCH, return_value=_mock_repo(url)):
+            result = set_repository_context(str(repo_dir))
 
-    def test_get_repository_context_delegates(self) -> None:
+        # Then: context is set
+        assert result["success"] is True, f"Expected success, got: {result}"
+        assert result["repository_info"]["name"] == "my-repo", (
+            f"Expected my-repo, got: {result['repository_info'].get('name')}"
+        )
+
+    def test_get_repository_context_returns_cached(self, tmp_path: Path) -> None:
         """
+        Given context has been set
         When get_repository_context() is called
-        Then it delegates to RepositoryContext.get()
+        Then the cached repository info is returned
         """
-        # Given/When: call the convenience function
-        with patch.object(RepositoryContext, "get", return_value={"name": "r"}) as mock_get:
-            result = get_repository_context("/override")
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
-        # Then: delegation verified
-        mock_get.assert_called_once_with("/override")
-        assert result["name"] == "r", f"Expected delegation result, got: {result}"
+        # When: call the convenience function
+        result = get_repository_context()
 
-    def test_get_context_status_delegates(self) -> None:
+        # Then: cached result
+        assert result["name"] == "my-repo", f"Expected my-repo, got: {result.get('name')}"
+        assert result.get("_context_source") == "cached", (
+            f"Expected source=cached, got: {result.get('_context_source')}"
+        )
+
+    def test_get_context_status_reports_state(self, tmp_path: Path) -> None:
         """
+        Given context has been set
         When get_context_status() is called
-        Then it delegates to RepositoryContext.status()
+        Then the status reflects the active context
         """
-        # Given/When: call the convenience function
-        expected: dict[str, Any] = {"context_set": False}
-        with patch.object(RepositoryContext, "status", return_value=expected) as mock_status:
-            result = get_context_status()
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
-        # Then: delegation verified
-        mock_status.assert_called_once()
-        assert result == expected, f"Expected delegation result, got: {result}"
+        # When: call the convenience function
+        result = get_context_status()
 
-    def test_clear_repository_context_delegates(self) -> None:
+        # Then: status reflects active context
+        assert result["context_set"] is True, f"Expected context_set=True, got: {result}"
+        assert result["cached_repository"] == "my-repo", (
+            f"Expected cached_repository=my-repo, got: {result.get('cached_repository')}"
+        )
+
+    def test_clear_repository_context_clears_state(self, tmp_path: Path) -> None:
         """
+        Given context has been set
         When clear_repository_context() is called
-        Then it delegates to RepositoryContext.clear()
+        Then all state is cleared
         """
-        # Given/When: call the convenience function
-        expected: dict[str, Any] = {"success": True, "message": "cleared"}
-        with patch.object(RepositoryContext, "clear", return_value=expected) as mock_clear:
-            result = clear_repository_context()
+        # Given: context set via real discovery
+        _set_context_via_public_api(tmp_path, "my-repo")
 
-        # Then: delegation verified
-        mock_clear.assert_called_once()
-        assert result == expected, f"Expected delegation result, got: {result}"
+        # When: call the convenience function
+        result = clear_repository_context()
+
+        # Then: state cleared
+        assert result["success"] is True, f"Expected success, got: {result}"
+        status = RepositoryContext.status()
+        assert status["context_set"] is False, f"Expected context_set=False, got: {status}"

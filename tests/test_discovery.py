@@ -3,7 +3,7 @@ BDD tests for ado_workflows.discovery — git repository discovery primitives.
 
 Covers:
     TestInspectGitRepository — single-repo extraction, non-ADO repos,
-        subprocess failures
+        GitPython errors
     TestDiscoverRepositories — single-repo root, multi-repo scanning,
         empty workspace
     TestInferTargetRepository — working directory match, single repo,
@@ -20,9 +20,12 @@ Public API surface (from src/ado_workflows/discovery.py):
 
 from __future__ import annotations
 
-import subprocess as sp
 from typing import TYPE_CHECKING, Any
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
+
+import pytest
+from actionable_errors import ActionableError
+from git import InvalidGitRepositoryError, NoSuchPathError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,19 +40,26 @@ from ado_workflows.discovery import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-_ADO_REMOTE = "https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo\n"
-_VSO_REMOTE = "https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo\n"
-_GITHUB_REMOTE = "https://github.com/example/some-repo.git\n"
+_ADO_REMOTE = "https://dev.azure.com/ExampleOrg/MyProject/_git/MyRepo"
+_VSO_REMOTE = "https://example.visualstudio.com/DefaultCollection/MyProject/_git/MyRepo"
+_GITHUB_REMOTE = "https://github.com/example/some-repo.git"
+_REPO_PATCH = "ado_workflows.discovery.Repo"
 
 
-def _git_success(remote: str = _ADO_REMOTE) -> Mock:
-    """Return a ``subprocess.run`` return value for a successful git call."""
-    return Mock(returncode=0, stdout=remote)
+def _mock_repo(remote_url: str = _ADO_REMOTE) -> MagicMock:
+    """Return a mock GitPython Repo with an origin remote."""
+    repo = MagicMock()
+    repo.remotes.origin.url = remote_url
 
+    def _bool(_self: object) -> bool:
+        return True
 
-def _git_failure() -> Mock:
-    """Return a ``subprocess.run`` return value for a failed git call."""
-    return Mock(returncode=1, stderr="fatal: not a git repository")
+    def _len(_self: object) -> int:
+        return 1
+
+    repo.remotes.__bool__ = _bool
+    repo.remotes.__len__ = _len
+    return repo
 
 
 def _make_git_repo(workspace: Path, name: str) -> Path:
@@ -74,15 +84,18 @@ class TestInspectGitRepository:
               organization, project, remote_url, and org_url
           (2) a valid visualstudio.com repo returns the legacy org_url format
           (3) a non-Azure DevOps remote returns None
-          (4) a git command failure returns None
-          (5) a subprocess timeout returns None
+          (4) an invalid git repository returns None
+          (5) a path that does not exist returns None
           (6) workspace_context is included with multi-repo detection
           (7) parent permission errors degrade gracefully to single-repo
+          (8) unexpected remote errors raise ActionableError
+          (9) a repo with no remotes configured returns None
+          (10) a ValueError or AttributeError from remote access returns None
     WHY: Repository metadata is the input to every Layer 2/3 operation —
          inspect is the single source of truth for what repo the user is in.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git CLI — the only I/O boundary)
+        Mock:  git.Repo (GitPython — the only I/O boundary)
         Real:  inspect_git_repository function, parse_ado_url (called
                internally), filesystem (tmp_path)
         Never: construct the return dict directly — always obtain via
@@ -97,10 +110,7 @@ class TestInspectGitRepository:
         """
         # Given: a directory with a .git folder and an ADO remote
         repo = _make_git_repo(tmp_path, "MyRepo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo()):
             # When: the repository is inspected
             result = inspect_git_repository(str(repo))
 
@@ -126,10 +136,7 @@ class TestInspectGitRepository:
         """
         # Given: a repo with a visualstudio.com remote
         repo = _make_git_repo(tmp_path, "MyRepo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(_VSO_REMOTE),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo(_VSO_REMOTE)):
             # When: the repository is inspected
             result = inspect_git_repository(str(repo))
 
@@ -147,51 +154,41 @@ class TestInspectGitRepository:
         """
         # Given: a repo with a GitHub remote
         repo = _make_git_repo(tmp_path, "some-repo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(_GITHUB_REMOTE),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo(_GITHUB_REMOTE)):
             # When: the repository is inspected
             result = inspect_git_repository(str(repo))
 
         # Then: None is returned for non-ADO repos
         assert result is None, f"Expected None for GitHub repo, got {result}"
 
-    def test_git_command_failure_returns_none(self, tmp_path: Path) -> None:
+    def test_invalid_git_repository_returns_none(self, tmp_path: Path) -> None:
         """
-        Given a directory where git config fails
+        Given a directory that is not a git repository
         When inspect_git_repository is called
         Then None is returned
         """
-        # Given: a directory where git fails
+        # Given: Repo() raises InvalidGitRepositoryError
         repo = _make_git_repo(tmp_path, "not-a-repo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_failure(),
-        ):
+        with patch(_REPO_PATCH, side_effect=InvalidGitRepositoryError("not a repo")):
             # When: the repository is inspected
             result = inspect_git_repository(str(repo))
 
         # Then: None is returned
-        assert result is None, f"Expected None for failed git command, got {result}"
+        assert result is None, f"Expected None for invalid git repo, got {result}"
 
-    def test_subprocess_timeout_returns_none(self, tmp_path: Path) -> None:
+    def test_nonexistent_path_returns_none(self, tmp_path: Path) -> None:
         """
-        Given a directory where git config times out
+        Given a path that does not exist
         When inspect_git_repository is called
         Then None is returned
         """
-        # Given: git command times out
-        repo = _make_git_repo(tmp_path, "slow-repo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            side_effect=sp.TimeoutExpired(cmd="git", timeout=10),
-        ):
+        # Given: Repo() raises NoSuchPathError
+        with patch(_REPO_PATCH, side_effect=NoSuchPathError("/nonexistent")):
             # When: the repository is inspected
-            result = inspect_git_repository(str(repo))
+            result = inspect_git_repository("/nonexistent")
 
-        # Then: None is returned gracefully
-        assert result is None, f"Expected None for subprocess timeout, got {result}"
+        # Then: None is returned
+        assert result is None, f"Expected None for nonexistent path, got {result}"
 
     def test_workspace_context_included_in_result(self, tmp_path: Path) -> None:
         """
@@ -205,10 +202,7 @@ class TestInspectGitRepository:
         _make_git_repo(workspace, "OtherRepo")
         (workspace / "ThirdDir").mkdir()
 
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo()):
             # When: the repository is inspected
             result = inspect_git_repository(str(repo))
 
@@ -239,10 +233,7 @@ class TestInspectGitRepository:
         parent.chmod(0o000)
 
         try:
-            with patch(
-                "ado_workflows.discovery.subprocess.run",
-                return_value=_git_success(),
-            ):
+            with patch(_REPO_PATCH, return_value=_mock_repo()):
                 # When: the repository is inspected
                 result = inspect_git_repository(str(repo))
 
@@ -255,6 +246,82 @@ class TestInspectGitRepository:
             )
         finally:
             parent.chmod(0o755)
+
+    def test_unexpected_remote_error_raises_actionable_error(self, tmp_path: Path) -> None:
+        """
+        Given a git repo where reading the remote raises an unexpected error
+        When inspect_git_repository is called
+        Then ActionableError is raised with diagnostic guidance
+        """
+        # Given: Repo is valid but accessing remotes raises unexpectedly
+        repo = _make_git_repo(tmp_path, "broken-repo")
+        mock_repo = MagicMock()
+
+        def _bool(_self: object) -> bool:
+            return True
+
+        def _len(_self: object) -> int:
+            return 1
+
+        mock_repo.remotes.__bool__ = _bool
+        mock_repo.remotes.__len__ = _len
+        type(mock_repo.remotes).origin = property(
+            lambda self: (_ for _ in ()).throw(RuntimeError("corrupt config")),
+        )
+        with patch(_REPO_PATCH, return_value=mock_repo):
+            # When / Then: raises ActionableError
+            with pytest.raises(ActionableError) as exc_info:
+                inspect_git_repository(str(repo))
+            assert "corrupt config" in str(exc_info.value), (
+                f"Expected error to mention cause, got {exc_info.value!r}"
+            )
+
+    def test_repo_with_no_remotes_returns_none(self, tmp_path: Path) -> None:
+        """
+        Given a valid git repo with no remotes configured
+        When inspect_git_repository is called
+        Then None is returned
+        """
+        # Given: a repo whose remotes list is empty
+        repo = _make_git_repo(tmp_path, "no-remotes")
+        mock_repo = MagicMock()
+        mock_repo.remotes = []
+
+        with patch(_REPO_PATCH, return_value=mock_repo):
+            # When: the repository is inspected
+            result = inspect_git_repository(str(repo))
+
+        # Then: None is returned because no remote URL can be read
+        assert result is None, f"Expected None for repo with no remotes, got {result}"
+
+    def test_value_error_from_remote_access_returns_none(self, tmp_path: Path) -> None:
+        """
+        Given a git repo where accessing origin raises ValueError
+        When inspect_git_repository is called
+        Then None is returned
+        """
+        # Given: Repo is valid, has remotes, but origin access raises ValueError
+        repo = _make_git_repo(tmp_path, "bad-origin")
+        mock_repo = MagicMock()
+
+        def _bool(_self: object) -> bool:
+            return True
+
+        def _len(_self: object) -> int:
+            return 1
+
+        mock_repo.remotes.__bool__ = _bool
+        mock_repo.remotes.__len__ = _len
+        type(mock_repo.remotes).origin = property(
+            lambda self: (_ for _ in ()).throw(ValueError("No remote named 'origin'")),
+        )
+
+        with patch(_REPO_PATCH, return_value=mock_repo):
+            # When: the repository is inspected
+            result = inspect_git_repository(str(repo))
+
+        # Then: None is returned gracefully
+        assert result is None, f"Expected None for ValueError on remote access, got {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +345,7 @@ class TestDiscoverRepositories:
          selection.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git CLI)
+        Mock:  git.Repo (GitPython — the only I/O boundary)
         Real:  discover_repositories function, inspect_git_repository
                (called internally), filesystem (tmp_path)
         Never: construct repo dicts directly — always obtain via
@@ -293,10 +360,7 @@ class TestDiscoverRepositories:
         """
         # Given: search_root has a .git folder
         repo = _make_git_repo(tmp_path, "MyRepo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo()):
             # When: repositories are discovered
             repos = discover_repositories(str(repo))
 
@@ -314,10 +378,7 @@ class TestDiscoverRepositories:
         """
         # Given: search_root has a .git folder but remote is GitHub
         repo = _make_git_repo(tmp_path, "GhRepo")
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            return_value=_git_success(_GITHUB_REMOTE),
-        ):
+        with patch(_REPO_PATCH, return_value=_mock_repo(_GITHUB_REMOTE)):
             # When: repositories are discovered
             repos = discover_repositories(str(repo))
 
@@ -336,16 +397,12 @@ class TestDiscoverRepositories:
         _make_git_repo(workspace, "RepoB")
         (workspace / "not-a-repo").mkdir()  # no .git — skipped
 
-        def git_response(*args: Any, **kwargs: Any) -> Mock:
-            cwd = str(kwargs.get("cwd", ""))
-            if "RepoA" in cwd:
-                return _git_success("https://dev.azure.com/ExampleOrg/ProjA/_git/RepoA\n")
-            return _git_success("https://dev.azure.com/ExampleOrg/ProjB/_git/RepoB\n")
+        def repo_factory(path: str) -> MagicMock:
+            if "RepoA" in path:
+                return _mock_repo("https://dev.azure.com/ExampleOrg/ProjA/_git/RepoA")
+            return _mock_repo("https://dev.azure.com/ExampleOrg/ProjB/_git/RepoB")
 
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            side_effect=git_response,
-        ):
+        with patch(_REPO_PATCH, side_effect=repo_factory):
             # When: repositories are discovered
             repos = discover_repositories(str(workspace))
 
@@ -366,16 +423,12 @@ class TestDiscoverRepositories:
         _make_git_repo(workspace, "AdoRepo")
         _make_git_repo(workspace, "GhRepo")
 
-        def git_response(*args: Any, **kwargs: Any) -> Mock:
-            cwd = str(kwargs.get("cwd", ""))
-            if "AdoRepo" in cwd:
-                return _git_success("https://dev.azure.com/ExampleOrg/Proj/_git/AdoRepo\n")
-            return _git_success(_GITHUB_REMOTE)
+        def repo_factory(path: str) -> MagicMock:
+            if "AdoRepo" in path:
+                return _mock_repo("https://dev.azure.com/ExampleOrg/Proj/_git/AdoRepo")
+            return _mock_repo(_GITHUB_REMOTE)
 
-        with patch(
-            "ado_workflows.discovery.subprocess.run",
-            side_effect=git_response,
-        ):
+        with patch(_REPO_PATCH, side_effect=repo_factory):
             # When: repositories are discovered
             repos = discover_repositories(str(workspace))
 

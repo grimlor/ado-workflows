@@ -1,15 +1,17 @@
 """
 Layer 1 — Git repository discovery primitives for Azure DevOps.
 
-Pure functions (except for subprocess calls to ``git``), no state, no SDK
-dependency.  Designed for single- and multi-repo workspaces.
+Uses GitPython for git operations — no subprocess calls.
+Designed for single- and multi-repo workspaces.
 """
 
 from __future__ import annotations
 
 import os
-import subprocess
 from typing import Any
+
+from actionable_errors import ActionableError
+from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 
 from ado_workflows.parsing import parse_ado_url
 
@@ -18,7 +20,7 @@ def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
     """
     Extract Azure DevOps metadata from a local git repository.
 
-    Runs ``git config --get remote.origin.url`` and parses the result.
+    Opens the repository via GitPython and reads the origin remote URL.
 
     Args:
         repo_path: Absolute path to a directory containing a ``.git`` folder.
@@ -28,55 +30,62 @@ def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
         ``remote_url``, ``org_url``, and ``workspace_context`` — or ``None``
         if the directory is not a valid Azure DevOps git repo.
 
+    Raises:
+        ActionableError: When the path exists and is a git repo but an
+            unexpected error prevents reading metadata.
+
     """
     try:
-        result = subprocess.run(
-            ["git", "config", "--get", "remote.origin.url"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            cwd=repo_path,
-        )
-
-        if result.returncode != 0:
-            return None
-
-        remote_url = result.stdout.strip()
-        org, project, repository, _ = parse_ado_url(remote_url)
-
-        if not all([org, project, repository]):
-            return None
-
-        # Construct org_url based on the original URL format
-        if ".visualstudio.com" in remote_url:
-            org_url = f"https://{org}.visualstudio.com"
-        else:
-            org_url = f"https://dev.azure.com/{org}"
-
-        # Workspace context — detect multi-repo workspaces
-        try:
-            is_multi_repo = len(os.listdir(os.path.dirname(repo_path))) > 1
-        except (OSError, PermissionError):
-            is_multi_repo = False
-
-        workspace_context = {
-            "is_multi_repo_workspace": is_multi_repo,
-            "workspace_root": os.path.dirname(repo_path),
-            "repository_relative_path": os.path.basename(repo_path),
-        }
-
-        return {
-            "path": repo_path,
-            "name": repository,
-            "organization": org,
-            "project": project,
-            "remote_url": remote_url,
-            "org_url": org_url,
-            "workspace_context": workspace_context,
-        }
-
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        repo = Repo(repo_path)
+    except (InvalidGitRepositoryError, NoSuchPathError):
         return None
+
+    try:
+        if not repo.remotes:
+            return None
+        remote_url = repo.remotes.origin.url
+    except (ValueError, AttributeError):
+        return None
+    except Exception as exc:
+        raise ActionableError.connection(
+            service="git",
+            url=repo_path,
+            raw_error=str(exc),
+            suggestion="Ensure the repository has a valid 'origin' remote configured.",
+        ) from exc
+
+    org, project, repository, _ = parse_ado_url(remote_url)
+
+    if not all([org, project, repository]):
+        return None
+
+    # Construct org_url based on the original URL format
+    if ".visualstudio.com" in remote_url:
+        org_url = f"https://{org}.visualstudio.com"
+    else:
+        org_url = f"https://dev.azure.com/{org}"
+
+    # Workspace context — detect multi-repo workspaces
+    try:
+        is_multi_repo = len(os.listdir(os.path.dirname(repo_path))) > 1
+    except (OSError, PermissionError):
+        is_multi_repo = False
+
+    workspace_context = {
+        "is_multi_repo_workspace": is_multi_repo,
+        "workspace_root": os.path.dirname(repo_path),
+        "repository_relative_path": os.path.basename(repo_path),
+    }
+
+    return {
+        "path": repo_path,
+        "name": repository,
+        "organization": org,
+        "project": project,
+        "remote_url": remote_url,
+        "org_url": org_url,
+        "workspace_context": workspace_context,
+    }
 
 
 def discover_repositories(search_root: str) -> list[dict[str, Any]]:

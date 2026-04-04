@@ -19,6 +19,7 @@ Public API surface (from src/ado_workflows/pr.py):
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -179,7 +180,7 @@ class TestRepositoryContextResolution:
          tool can't know which org/project/repo the ID belongs to.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git process — the only I/O edge)
+        Mock:  git.Repo (GitPython — the only I/O edge)
         Real:  AzureDevOpsPRContext, RepositoryContext, discover_repositories,
                infer_target_repository, parse_ado_url, tmp_path filesystem
         Never: mock any of our own functions (discover_repositories,
@@ -198,11 +199,12 @@ class TestRepositoryContextResolution:
         project: str = "Payments",
         repo_name: str = "PaymentsRepo",
     ) -> None:
-        """Populate RepositoryContext cache — mocks only subprocess (I/O edge)."""
+        """Populate RepositoryContext cache — mocks only git.Repo (I/O edge)."""
         (Path(directory) / ".git").mkdir(exist_ok=True)
         remote_url = f"https://dev.azure.com/{organization}/{project}/_git/{repo_name}"
-        mock_git = MagicMock(returncode=0, stdout=f"{remote_url}\n")
-        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = remote_url
+        with patch("ado_workflows.discovery.Repo", return_value=mock_repo):
             RepositoryContext.set(directory)
 
     def test_cached_context_produces_correct_pr_context(self, tmp_path: Path) -> None:
@@ -277,9 +279,10 @@ class TestRepositoryContextResolution:
         (specific_dir / ".git").mkdir()
 
         specific_url = "https://dev.azure.com/SpecificOrg/SpecificProject/_git/SpecificRepo"
-        mock_git = MagicMock(returncode=0, stdout=f"{specific_url}\n")
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = specific_url
 
-        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
+        with patch("ado_workflows.discovery.Repo", return_value=mock_repo):
             # When: from_pr_id() is called with an explicit working_directory
             ctx = AzureDevOpsPRContext.from_pr_id(42, str(specific_dir))
 
@@ -326,7 +329,7 @@ class TestPRContextFactory:
          handles both forms.
 
     MOCK BOUNDARY:
-        Mock:  subprocess.run (git process — I/O edge, only on the numeric path)
+        Mock:  git.Repo (GitPython — I/O edge, only on the numeric path)
         Real:  establish_pr_context, AzureDevOpsPRContext, parse_ado_url,
                RepositoryContext, discover_repositories, infer_target_repository,
                tmp_path filesystem
@@ -369,8 +372,9 @@ class TestPRContextFactory:
         repo_dir.mkdir()
         (repo_dir / ".git").mkdir()
         remote_url = "https://dev.azure.com/ContosoOrg/Payments/_git/PaymentsRepo"
-        mock_git = MagicMock(returncode=0, stdout=f"{remote_url}\n")
-        with patch("ado_workflows.discovery.subprocess.run", return_value=mock_git):
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = remote_url
+        with patch("ado_workflows.discovery.Repo", return_value=mock_repo):
             RepositoryContext.set(str(repo_dir))
 
         # When: the factory receives a numeric string
@@ -525,4 +529,30 @@ class TestSerialization:
         assert len(result) == 7, (
             f"Expected 7 keys (6 dataclass fields + org_url), "
             f"got {len(result)}: {sorted(result.keys())}"
+        )
+
+    def test_to_dict_is_json_serializable(self) -> None:
+        """
+        Given a populated context
+        When .to_dict() is called and the result is passed to json.dumps()
+        Then it serializes without raising TypeError
+        """
+        # Given: a fully populated context
+        ctx = AzureDevOpsPRContext(
+            pr_url="https://dev.azure.com/ContosoOrg/Payments/_git/PaymentsRepo/pullrequest/99",
+            organization="ContosoOrg",
+            project="Payments",
+            repository="PaymentsRepo",
+            pr_id=99,
+            source="url",
+        )
+
+        # When: to_dict() result is serialized to JSON
+        result = ctx.to_dict()
+        serialized = json.dumps(result)
+
+        # Then: round-trip produces the same data
+        deserialized = json.loads(serialized)
+        assert deserialized == result, (
+            f"JSON round-trip mismatch.\nOriginal: {result}\nDeserialized: {deserialized}"
         )

@@ -152,15 +152,6 @@ class RepositoryContext:
             # Override or cache miss → fresh discovery
             repo_info = cls._discover(target)
 
-            # Update cache only for the primary context (not overrides)
-            if (
-                working_directory is None
-                and repo_info.get("success", True)
-                and "name" in repo_info
-            ):
-                cls._cached_info = repo_info
-                cls._cache_timestamp = datetime.now(tz=UTC).isoformat()
-
             return cls._add_metadata(repo_info, "fresh_discovery")
 
     @classmethod
