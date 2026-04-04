@@ -485,3 +485,51 @@ class PullRequestDetail:
     reviewers: list[ReviewerDetail]
     labels: list[LabelDetail]
     work_item_refs: list[WorkItemRef]
+
+
+# ---------------------------------------------------------------------------
+# Data-gathering types (FR3a)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PullRequestSummary:
+    """Lightweight PR data from list endpoints — includes computed web_url."""
+
+    pr_id: int
+    title: str
+    status: str
+    created_by: str
+    creation_date: str
+    source_branch: str
+    target_branch: str
+    repository_name: str
+    web_url: str
+    is_draft: bool
+    merge_status: str
+
+
+@dataclass(frozen=True)
+class WorkItemSummary:
+    """Enriched work item from WIQL query + batch fetch."""
+
+    id: int
+    title: str
+    state: str
+    work_item_type: str
+    assigned_to: str | None
+    iteration_path: str | None
+    completed_work: float | None
+    remaining_work: float | None
+    url: str
+
+
+@dataclass(frozen=True)
+class CommitSummary:
+    """Git commit metadata from a local repository."""
+
+    sha: str
+    message: str
+    author: str
+    date: int  # Unix timestamp
+    repo_name: str

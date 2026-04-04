@@ -9,7 +9,7 @@ Three-layer API for Azure DevOps operations:
 
 from __future__ import annotations
 
-from ado_workflows.auth import AZURE_DEVOPS_RESOURCE_ID, ConnectionFactory
+from ado_workflows.auth import AZURE_DEVOPS_RESOURCE_ID, ConnectionFactory, get_current_user
 from ado_workflows.client import AdoClient
 from ado_workflows.comments import (
     analyze_pr_comments,
@@ -53,6 +53,7 @@ from ado_workflows.lifecycle import (
     set_draft_status,
     update_pull_request,
 )
+from ado_workflows.listing import list_commits, list_pull_requests, query_work_items
 from ado_workflows.models import (
     VOTE_TEXT,
     ApprovalStatus,
@@ -63,6 +64,7 @@ from ado_workflows.models import (
     CommentSeverity,
     CommentSummary,
     CommentType,
+    CommitSummary,
     ContentResult,
     CreatedPR,
     FileChange,
@@ -76,6 +78,7 @@ from ado_workflows.models import (
     PostedCommentDetail,
     PostingResult,
     PullRequestDetail,
+    PullRequestSummary,
     ResolveResult,
     ReviewerDetail,
     ReviewerInfo,
@@ -85,9 +88,10 @@ from ado_workflows.models import (
     UserIdentity,
     VoteStatus,
     WorkItemRef,
+    WorkItemSummary,
 )
 from ado_workflows.parsing import parse_ado_date, parse_ado_url
-from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context
+from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context, get_pr_author
 from ado_workflows.praise import filter_self_praise, is_praise_comment
 from ado_workflows.review import (
     analyze_pending_reviews,
@@ -111,6 +115,7 @@ __all__: list[str] = [
     "CommentSeverity",
     "CommentSummary",
     "CommentType",
+    "CommitSummary",
     "ConnectionFactory",
     "ContentResult",
     "CreatedPR",
@@ -125,6 +130,7 @@ __all__: list[str] = [
     "PostedCommentDetail",
     "PostingResult",
     "PullRequestDetail",
+    "PullRequestSummary",
     "RepositoryContext",
     "ResolveResult",
     "ReviewStatus",
@@ -135,6 +141,7 @@ __all__: list[str] = [
     "UserIdentity",
     "VoteStatus",
     "WorkItemRef",
+    "WorkItemSummary",
     "abandon_pull_request",
     "add_label",
     "add_reviewer",
@@ -153,6 +160,8 @@ __all__: list[str] = [
     "filter_self_praise",
     "format_comment",
     "get_context_status",
+    "get_current_user",
+    "get_pr_author",
     "get_pr_work_item_refs",
     "get_pull_request",
     "get_repository_context",
@@ -160,13 +169,16 @@ __all__: list[str] = [
     "infer_target_repository",
     "inspect_git_repository",
     "is_praise_comment",
+    "list_commits",
     "list_labels",
+    "list_pull_requests",
     "list_reviewers",
     "parse_ado_date",
     "parse_ado_url",
     "post_comment",
     "post_comments",
     "post_rich_comments",
+    "query_work_items",
     "remove_label",
     "remove_reviewer",
     "reply_to_comment",

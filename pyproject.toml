@@ -25,6 +25,7 @@ dependencies = [
     "actionable-errors>=0.1.0",
     "azure-devops>=7.1.0b4",
     "azure-identity>=1.19,<2",
+    "gitpython>=3.1",
 ]
 
 [tool.uv]

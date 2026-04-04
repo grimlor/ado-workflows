@@ -87,10 +87,14 @@ class GitPullRequestCommentThread:
 
 class GitPullRequestSearchCriteria:
     status: str | None
+    creator_id: str | None
+    reviewer_id: str | None
     def __init__(
         self,
         *,
         status: str | None = None,
+        creator_id: str | None = None,
+        reviewer_id: str | None = None,
         **kwargs: Any,
     ) -> None: ...
 
@@ -139,6 +143,12 @@ class GitCommitRef:
     ) -> None: ...
 
 
+class GitRepository:
+    name: str
+    web_url: str
+    id: str
+
+
 class GitPullRequest:
     pull_request_id: int
     title: str
@@ -156,6 +166,7 @@ class GitPullRequest:
     labels: list[WebApiTagDefinition] | None
     work_item_refs: list[ResourceRef] | None
     completion_options: GitPullRequestCompletionOptions | None
+    repository: GitRepository
     def __init__(
         self,
         *,

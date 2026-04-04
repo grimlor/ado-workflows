@@ -36,6 +36,15 @@ class GitClient:
         top: int | None = None,
     ) -> list[GitPullRequest]: ...
 
+    def get_pull_requests_by_project(
+        self,
+        project: str,
+        search_criteria: GitPullRequestSearchCriteria,
+        max_comment_length: int | None = None,
+        skip: int | None = None,
+        top: int | None = None,
+    ) -> list[GitPullRequest]: ...
+
     def get_threads(
         self,
         repository_id: str,
