@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-04-04)
+
+### Build System
+
+- Enable --cov-branch in task cov for parity with VS Code coverage
+  ([`1265259`](https://github.com/grimlor/ado-workflows/commit/126525902057492843e6cb8199663c9f657188e8))
+
+### Continuous Integration
+
+- Add --cov-branch to CI coverage for parity with local task cov
+  ([`b3974c4`](https://github.com/grimlor/ado-workflows/commit/b3974c4337ff7f285ce3bcb2f3d5cac1f10ae5e3))
+
+### Features
+
+- Add data-gathering library (FR3a)
+  ([`bc97205`](https://github.com/grimlor/ado-workflows/commit/bc97205e9b032cf5d130537b742d0accef720137))
+
+
 ## v0.6.0 (2026-04-01)
 
 ### Features
