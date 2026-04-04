@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.1 (2026-04-04)
+
+### Bug Fixes
+
+- **discovery**: Replace subprocess.run with GitPython and fix test mock boundaries
+  ([`25db585`](https://github.com/grimlor/ado-workflows/commit/25db585cb73df56d490d51dd7d76b267c662181c))
+
+
 ## v0.7.0 (2026-04-04)
 
 ### Build System
