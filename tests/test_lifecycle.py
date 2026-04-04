@@ -591,14 +591,10 @@ class TestUpdatePullRequest:
         from ado_workflows.lifecycle import update_pull_request
 
         with pytest.raises(ActionableError) as exc_info:
-            update_pull_request(
-                client, "Repo", pr_id=42, project="Proj", title="New Title"
-            )
+            update_pull_request(client, "Repo", pr_id=42, project="Proj", title="New Title")
 
         error_msg = str(exc_info.value)
-        assert "Permission denied" in error_msg, (
-            f"Expected SDK error in message, got: {error_msg}"
-        )
+        assert "Permission denied" in error_msg, f"Expected SDK error in message, got: {error_msg}"
 
 
 # ---------------------------------------------------------------------------
