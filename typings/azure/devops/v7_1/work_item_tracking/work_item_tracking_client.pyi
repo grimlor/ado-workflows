@@ -3,6 +3,7 @@
 from typing import Any
 
 from azure.devops.v7_1.work_item_tracking.models import (
+    TeamContext,
     Wiql,
     WorkItem,
     WorkItemQueryResult,
@@ -15,8 +16,7 @@ class WorkItemTrackingClient:
     def query_by_wiql(
         self,
         wiql: Wiql,
-        project: str | None = None,
-        team: str | None = None,
+        team_context: TeamContext | None = None,
         time_precision: bool | None = None,
         top: int | None = None,
     ) -> WorkItemQueryResult: ...

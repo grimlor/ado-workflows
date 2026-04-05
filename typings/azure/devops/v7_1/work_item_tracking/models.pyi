@@ -23,3 +23,17 @@ class WorkItem:
     id: int
     url: str
     fields: dict[str, Any]
+
+
+class TeamContext:
+    project: str | None
+    project_id: str | None
+    team: str | None
+    team_id: str | None
+    def __init__(
+        self,
+        project: str | None = None,
+        project_id: str | None = None,
+        team: str | None = None,
+        team_id: str | None = None,
+    ) -> None: ...

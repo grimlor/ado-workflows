@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 from azure.devops.v7_1.git.models import GitPullRequest, GitPullRequestSearchCriteria
-from azure.devops.v7_1.work_item_tracking.models import Wiql, WorkItem
+from azure.devops.v7_1.work_item_tracking.models import TeamContext, Wiql, WorkItem
 from git import Repo
 
 from ado_workflows.models import CommitSummary, PullRequestSummary, WorkItemSummary
@@ -139,7 +139,7 @@ def query_work_items(
     try:
         query_result = client.work_items.query_by_wiql(
             wiql_obj,
-            project=project,
+            team_context=TeamContext(project=project),
             top=top,
         )
     except Exception as exc:

@@ -256,7 +256,8 @@ class TestContextSet:
         )
 
     def test_set_with_ambiguous_workspace_falls_back_to_first_repo(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """
         Given a workspace with multiple ADO repos and neither matches cwd
