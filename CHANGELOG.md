@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.7.2 (2026-04-05)
+
+### Bug Fixes
+
+- Use TeamContext for query_by_wiql instead of project kwarg\n\nThe Azure DevOps SDK's
+  query_by_wiql() accepts team_context, not a\nproject keyword argument. The incorrect kwarg caused
+  a TypeError at\nruntime when generating WSRs.\n\nUpdated type stubs to match the actual SDK
+  signature.
+  ([`f1cb4b9`](https://github.com/grimlor/ado-workflows/commit/f1cb4b9d7e3fe08c2e976d7a868bd7a80d33c20f))
+
+
 ## v0.7.1 (2026-04-04)
 
 ### Bug Fixes
