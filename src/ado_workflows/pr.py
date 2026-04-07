@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from actionable_errors import ActionableError
 
 from ado_workflows.context import RepositoryContext
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import UserIdentity
 from ado_workflows.parsing import parse_ado_url
 
@@ -232,14 +233,8 @@ def get_pr_author(
     try:
         pr = client.git.get_pull_request_by_id(pr_id, project=project)
     except Exception as exc:
-        raise ActionableError.not_found(
-            service="AzureDevOps",
-            resource_type="pull_request",
-            resource_id=str(pr_id),
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify PR {pr_id} exists in project '{project}' and that you have read access."
-            ),
+        raise classify_ado_error(
+            exc, operation=f"get PR {pr_id} author", context_hint=str(pr_id)
         ) from exc
 
     author = pr.created_by

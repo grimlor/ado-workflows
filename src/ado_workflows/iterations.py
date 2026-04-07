@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from actionable_errors import ActionableError
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import FileChange, IterationContext, IterationInfo
 
 if TYPE_CHECKING:
@@ -38,14 +39,10 @@ def get_pr_iterations(
     try:
         raw_iterations = client.git.get_pull_request_iterations(repository, pr_id, project=project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/iterations",
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify the PR {pr_id} exists in repository '{repository}' "
-                f"and that you have read access."
-            ),
+        raise classify_ado_error(
+            exc,
+            operation=f"get iterations for PR {pr_id}",
+            context_hint=str(pr_id),
         ) from exc
 
     return [
@@ -81,14 +78,10 @@ def get_iteration_changes(
             repository, pr_id, iteration_id, project=project
         )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/iterations/{iteration_id}/changes",
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify PR {pr_id} and iteration {iteration_id} exist. "
-                f"Check network connectivity to Azure DevOps."
-            ),
+        raise classify_ado_error(
+            exc,
+            operation=f"get iteration {iteration_id} changes for PR {pr_id}",
+            context_hint=str(pr_id),
         ) from exc
 
     result: list[FileChange] = []

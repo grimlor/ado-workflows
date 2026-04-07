@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from actionable_errors import ActionableError
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.parsing import parse_ado_url
 
 
@@ -47,11 +47,8 @@ def inspect_git_repository(repo_path: str) -> dict[str, Any] | None:
     except (ValueError, AttributeError):
         return None
     except Exception as exc:
-        raise ActionableError.connection(
-            service="git",
-            url=repo_path,
-            raw_error=str(exc),
-            suggestion="Ensure the repository has a valid 'origin' remote configured.",
+        raise classify_ado_error(
+            exc, operation=f"inspect git remote at '{repo_path}'", context_hint=repo_path
         ) from exc
 
     org, project, repository, _ = parse_ado_url(remote_url)

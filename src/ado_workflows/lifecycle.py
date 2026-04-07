@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import (
     VOTE_TEXT,
     CreatedPR,
@@ -144,14 +145,8 @@ def create_pull_request(
     try:
         response = client.git.create_pull_request(pr_model, repository, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests",
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify repository '{repository}' exists in project "
-                f"'{project}' and you have create-PR permissions."
-            ),
+        raise classify_ado_error(
+            exc, operation=f"create PR in '{repository}'", context_hint=repository
         ) from exc
 
     return CreatedPR(
@@ -186,12 +181,8 @@ def get_pull_request(
     try:
         response = client.git.get_pull_request_by_id(pr_id, project=project)
     except Exception as exc:
-        raise ActionableError.not_found(
-            service="AzureDevOps",
-            resource_type="pull_request",
-            resource_id=str(pr_id),
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists in project '{project}' and you have read access.",
+        raise classify_ado_error(
+            exc, operation=f"get PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return _map_pr_detail(response)
@@ -231,11 +222,8 @@ def update_pull_request(
     try:
         response = client.git.update_pull_request(pr_model, repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have edit permissions.",
+        raise classify_ado_error(
+            exc, operation=f"update PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return _map_pr_detail(response)
@@ -263,14 +251,10 @@ def retarget_pull_request(
     try:
         response = client.git.update_pull_request(pr_model, repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify branch '{target_branch}' exists in repository "
-                f"'{repository}' and you have edit permissions."
-            ),
+        raise classify_ado_error(
+            exc,
+            operation=f"retarget PR {pr_id} to '{target_branch}'",
+            context_hint=str(pr_id),
         ) from exc
 
     return _map_pr_detail(response)
@@ -296,11 +280,8 @@ def set_draft_status(
     try:
         response = client.git.update_pull_request(pr_model, repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have edit permissions.",
+        raise classify_ado_error(
+            exc, operation=f"set draft status on PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return _map_pr_detail(response)
@@ -329,11 +310,8 @@ def abandon_pull_request(
     try:
         response = client.git.update_pull_request(pr_model, repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have permissions to abandon it.",
+        raise classify_ado_error(
+            exc, operation=f"abandon PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return _map_pr_detail(response)
@@ -381,22 +359,8 @@ def complete_pull_request(
     try:
         response = client.git.update_pull_request(pr_model, repository, pr_id, project)
     except Exception as exc:
-        error_str = str(exc).lower()
-        if "conflict" in error_str:
-            raise ActionableError.connection(
-                service="AzureDevOps",
-                url=f"{repository}/pullrequests/{pr_id}",
-                raw_error=str(exc),
-                suggestion=(
-                    f"PR {pr_id} has merge conflicts. Resolve conflicts in the "
-                    f"source branch before completing."
-                ),
-            ) from exc
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} is approved and you have complete permissions.",
+        raise classify_ado_error(
+            exc, operation=f"complete PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return _map_pr_detail(response)
@@ -434,11 +398,10 @@ def add_reviewer(
             reviewer_model, repository, pr_id, reviewer_id, project
         )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/reviewers/{reviewer_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify reviewer '{reviewer_id}' is a valid identity.",
+        raise classify_ado_error(
+            exc,
+            operation=f"add reviewer '{reviewer_id}' to PR {pr_id}",
+            context_hint=reviewer_id,
         ) from exc
 
     return _map_reviewer(response)
@@ -462,11 +425,10 @@ def remove_reviewer(
     try:
         client.git.delete_pull_request_reviewer(repository, pr_id, reviewer_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/reviewers/{reviewer_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify reviewer '{reviewer_id}' exists on PR {pr_id}.",
+        raise classify_ado_error(
+            exc,
+            operation=f"remove reviewer '{reviewer_id}' from PR {pr_id}",
+            context_hint=reviewer_id,
         ) from exc
 
 
@@ -486,11 +448,8 @@ def list_reviewers(
     try:
         sdk_reviewers = client.git.get_pull_request_reviewers(repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/reviewers",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have read access.",
+        raise classify_ado_error(
+            exc, operation=f"list reviewers on PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return [_map_reviewer(r) for r in sdk_reviewers]
@@ -521,11 +480,8 @@ def add_label(
     try:
         response = client.git.create_pull_request_label(label_model, repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/labels",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have label permissions.",
+        raise classify_ado_error(
+            exc, operation=f"add label '{name}' to PR {pr_id}", context_hint=name
         ) from exc
 
     return _map_label(response)
@@ -549,11 +505,10 @@ def remove_label(
     try:
         client.git.delete_pull_request_labels(repository, pr_id, label_name, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/labels/{label_name}",
-            raw_error=str(exc),
-            suggestion=f"Verify label '{label_name}' exists on PR {pr_id}.",
+        raise classify_ado_error(
+            exc,
+            operation=f"remove label '{label_name}' from PR {pr_id}",
+            context_hint=label_name,
         ) from exc
 
 
@@ -573,11 +528,8 @@ def list_labels(
     try:
         sdk_labels = client.git.get_pull_request_labels(repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/labels",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have read access.",
+        raise classify_ado_error(
+            exc, operation=f"list labels on PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return [_map_label(lbl) for lbl in sdk_labels]
@@ -604,11 +556,8 @@ def get_pr_work_item_refs(
     try:
         sdk_refs = client.git.get_pull_request_work_item_refs(repository, pr_id, project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/workitems",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and you have read access.",
+        raise classify_ado_error(
+            exc, operation=f"get work items for PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return [_map_work_item_ref(w) for w in sdk_refs]

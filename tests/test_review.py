@@ -1073,8 +1073,8 @@ class TestGetReviewStatus:
         assert len(result.warnings) == 1, (
             f"Expected 1 warning for properties failure, got {len(result.warnings)}"
         )
-        assert "get_pull_request_properties" in str(result.warnings[0]), (
-            f"Expected properties operation in warning, got: {result.warnings[0]}"
+        assert "PR properties" in str(result.warnings[0]), (
+            f"Expected PR properties operation in warning, got: {result.warnings[0]}"
         )
 
     def test_policy_api_failure_produces_warning(self) -> None:
@@ -1119,6 +1119,6 @@ class TestGetReviewStatus:
         assert len(result.warnings) == 1, (
             f"Expected 1 warning for policy failure, got {len(result.warnings)}"
         )
-        assert "fetch_required_approvals" in str(result.warnings[0]), (
-            f"Expected fetch_required_approvals in warning, got: {result.warnings[0]}"
+        assert "required approvals" in str(result.warnings[0]), (
+            f"Expected required approvals in warning, got: {result.warnings[0]}"
         )

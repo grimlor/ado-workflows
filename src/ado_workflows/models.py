@@ -533,3 +533,21 @@ class CommitSummary:
     author: str
     date: int  # Unix timestamp
     repo_name: str
+
+
+@dataclass(frozen=True)
+class RepoItem:
+    """
+    A file or folder entry from a remote Azure DevOps repository.
+
+    Produced by :func:`content.list_repo_items`. All string fields
+    default to ``""`` when the SDK returns ``None``, so callers never
+    need to handle nullable fields.
+    """
+
+    path: str
+    is_folder: bool
+    git_object_type: str  # "blob", "tree", etc.
+    object_id: str  # SHA-1 of the object
+    commit_id: str  # commit that last changed this item
+    url: str | None = None

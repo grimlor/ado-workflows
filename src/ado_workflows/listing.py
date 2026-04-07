@@ -16,6 +16,7 @@ from azure.devops.v7_1.git.models import GitPullRequest, GitPullRequestSearchCri
 from azure.devops.v7_1.work_item_tracking.models import TeamContext, Wiql, WorkItem
 from git import Repo
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import CommitSummary, PullRequestSummary, WorkItemSummary
 
 if TYPE_CHECKING:
@@ -83,10 +84,8 @@ def list_pull_requests(
                 top=top,
             )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{project}/pullRequests",
-            raw_error=str(exc),
+        raise classify_ado_error(
+            exc, operation=f"list pull requests in '{project}'", context_hint=project
         ) from exc
 
     return [_map_pr_summary(pr) for pr in raw_prs]
@@ -143,10 +142,8 @@ def query_work_items(
             top=top,
         )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{project}/wiql",
-            raw_error=str(exc),
+        raise classify_ado_error(
+            exc, operation=f"execute WIQL query in '{project}'", context_hint=project
         ) from exc
 
     ids = [wi.id for wi in (query_result.work_items or [])]
@@ -163,10 +160,8 @@ def query_work_items(
                 fields=_WORK_ITEM_FIELDS,
             )
         except Exception as exc:
-            raise ActionableError.connection(
-                service="AzureDevOps",
-                url=f"{project}/workItems",
-                raw_error=str(exc),
+            raise classify_ado_error(
+                exc, operation=f"fetch work items in '{project}'", context_hint=project
             ) from exc
         items.extend(_map_work_item(wi) for wi in raw_items)
 

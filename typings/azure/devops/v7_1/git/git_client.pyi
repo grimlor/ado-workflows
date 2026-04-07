@@ -7,6 +7,7 @@ from typing import Any
 from azure.devops.v7_1.git.models import (
     Comment,
     GitCommitRef,
+    GitItem,
     GitPullRequest,
     GitPullRequestCommentThread,
     GitPullRequestIteration,
@@ -198,6 +199,20 @@ class GitClient:
         skip: int | None = None,
         compare_to: int | None = None,
     ) -> GitPullRequestIterationChanges: ...
+
+    def get_items(
+        self,
+        repository_id: str,
+        project: str | None = None,
+        scope_path: str | None = None,
+        recursion_level: str | None = None,
+        include_content_metadata: bool | None = None,
+        latest_processed_change: bool | None = None,
+        download: bool | None = None,
+        include_links: bool | None = None,
+        version_descriptor: GitVersionDescriptor | None = None,
+        zip_for_unix: bool | None = None,
+    ) -> list[GitItem]: ...
 
     def get_item_content(
         self,

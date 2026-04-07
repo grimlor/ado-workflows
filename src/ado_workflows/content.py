@@ -1,22 +1,25 @@
 """
-File content retrieval from Azure DevOps repositories.
+File and directory content retrieval from Azure DevOps repositories.
 
-Provides single-file retrieval (:func:`get_file_content`) and batch
+Provides single-file retrieval (:func:`get_file_content`), batch
 PR-scoped retrieval (:func:`get_changed_file_contents`) with
-partial-success semantics.
+partial-success semantics, and directory listing
+(:func:`list_repo_items`) for any branch, commit, or tag.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from actionable_errors import ActionableError
 from azure.devops.v7_1.git.models import GitVersionDescriptor
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.iterations import get_latest_iteration_context
-from ado_workflows.models import ContentResult, FileContent
+from ado_workflows.models import ContentResult, FileContent, RepoItem
 
 if TYPE_CHECKING:
+    from actionable_errors import ActionableError
+
     from ado_workflows.client import AdoClient
 
 
@@ -62,23 +65,8 @@ def get_file_content(
         raw_bytes = b"".join(content_iter)
 
     except Exception as exc:
-        error_str = str(exc)
-        if "TF401174" in error_str or "does not exist" in error_str.lower():
-            raise ActionableError.not_found(
-                service="AzureDevOps",
-                resource_type="file",
-                resource_id=path,
-                raw_error=error_str,
-                suggestion=(
-                    f"Verify the file path '{path}' exists in the repository. "
-                    f"Check branch/commit reference if specified."
-                ),
-            ) from exc
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/items/{path}",
-            raw_error=error_str,
-            suggestion="Check network connectivity to Azure DevOps.",
+        raise classify_ado_error(
+            exc, operation=f"get file content '{path}'", context_hint=path
         ) from exc
 
     # Attempt UTF-8 decode; fall back for binary files
@@ -138,11 +126,8 @@ def get_changed_file_contents(
         pr = client.git.get_pull_request_by_id(pr_id, project=project)
         branch = pr.source_ref_name.replace("refs/heads/", "")
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"pullrequests/{pr_id}",
-            raw_error=str(exc),
-            suggestion=f"Verify PR {pr_id} exists and is accessible.",
+        raise classify_ado_error(
+            exc, operation=f"get PR {pr_id} for file content", context_hint=str(pr_id)
         ) from exc
 
     # Discover files if not specified
@@ -208,24 +193,77 @@ def get_changed_file_contents(
                 and ("TF401174" in str(exc) or "does not exist" in str(exc).lower())
                 and (merge_commit is None or merge_commit.commit_id is None)
             ):
-                raise ActionableError.not_found(
-                    service="AzureDevOps",
-                    resource_type="PR source",
-                    resource_id=f"PR {pr_id}",
-                    raw_error=str(exc),
-                    suggestion=(
-                        f"Source branch for PR {pr_id} has been deleted and no "
-                        f"merge commit is available. The PR source code cannot be retrieved."
-                    ),
+                raise classify_ado_error(
+                    exc,
+                    operation=f"get source for completed PR {pr_id}",
+                    context_hint=f"PR {pr_id}",
                 ) from exc
 
-            err = ActionableError.internal(
-                service="ado-workflows",
-                operation="get_file_content",
-                raw_error=str(exc),
-                suggestion=f"Failed to fetch '{path}'. Verify the file exists in the PR branch.",
+            err = classify_ado_error(
+                exc,
+                operation=f"get file content '{path}' from PR {pr_id}",
+                context_hint=path,
             )
             err.context = {"path": path}
             failures.append(err)
 
     return ContentResult(files=files, failures=failures)
+
+
+def list_repo_items(
+    client: AdoClient,
+    repository: str,
+    project: str,
+    *,
+    path: str = "/",
+    ref: str | None = None,
+    recursion: str = "oneLevel",
+) -> list[RepoItem]:
+    """
+    List files and folders at a path on any branch, commit, or tag.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        repository: Repository name or GUID.
+        project: Azure DevOps project name or GUID.
+        path: Directory path to list. Defaults to ``"/"``.
+        ref: Branch name, commit SHA, or tag. ``None`` = default branch.
+        recursion: Recursion level — ``"none"``, ``"oneLevel"`` (default),
+            ``"oneLevelPlusNestedEmptyFolders"``, or ``"full"``.
+
+    Returns:
+        A list of :class:`~models.RepoItem` for each file/folder at the path.
+
+    Raises:
+        ActionableError: Classified by :func:`~errors.classify_ado_error`.
+
+    """
+    try:
+        version_descriptor = None
+        if ref is not None:
+            version_descriptor = GitVersionDescriptor(version=ref, version_type="branch")
+
+        sdk_items = client.git.get_items(
+            repository,
+            project=project,
+            scope_path=path,
+            recursion_level=recursion,
+            version_descriptor=version_descriptor,
+        )
+
+    except Exception as exc:
+        raise classify_ado_error(
+            exc, operation=f"list items at '{path}'", context_hint=path
+        ) from exc
+
+    return [
+        RepoItem(
+            path=item.path or "",
+            is_folder=bool(item.is_folder),
+            git_object_type=item.git_object_type or "",
+            object_id=item.object_id or "",
+            commit_id=item.commit_id or "",
+            url=item.url,
+        )
+        for item in (sdk_items or [])
+    ]

@@ -20,6 +20,7 @@ from ado_workflows.comments import (
     resolve_comments,
     sanitize_ado_response,
 )
+from ado_workflows.content import list_repo_items
 from ado_workflows.context import (
     RepositoryContext,
     clear_repository_context,
@@ -32,6 +33,7 @@ from ado_workflows.discovery import (
     infer_target_repository,
     inspect_git_repository,
 )
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.formatting import (
     CommentFormatter,
     default_comment_formatter,
@@ -79,6 +81,7 @@ from ado_workflows.models import (
     PostingResult,
     PullRequestDetail,
     PullRequestSummary,
+    RepoItem,
     ResolveResult,
     ReviewerDetail,
     ReviewerInfo,
@@ -131,6 +134,7 @@ __all__: list[str] = [
     "PostingResult",
     "PullRequestDetail",
     "PullRequestSummary",
+    "RepoItem",
     "RepositoryContext",
     "ResolveResult",
     "ReviewStatus",
@@ -147,6 +151,7 @@ __all__: list[str] = [
     "add_reviewer",
     "analyze_pending_reviews",
     "analyze_pr_comments",
+    "classify_ado_error",
     "clear_repository_context",
     "complete_pull_request",
     "create_pull_request",
@@ -172,6 +177,7 @@ __all__: list[str] = [
     "list_commits",
     "list_labels",
     "list_pull_requests",
+    "list_repo_items",
     "list_reviewers",
     "parse_ado_date",
     "parse_ado_url",

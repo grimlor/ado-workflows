@@ -11,6 +11,32 @@ class IdentityRef:
     id: str
 
 
+class GitItem:
+    path: str | None
+    is_folder: bool | None
+    is_sym_link: bool | None
+    git_object_type: str | None
+    object_id: str | None
+    commit_id: str | None
+    url: str | None
+    content: str | None
+    original_object_id: str | None
+    def __init__(
+        self,
+        *,
+        path: str | None = None,
+        is_folder: bool | None = None,
+        is_sym_link: bool | None = None,
+        git_object_type: str | None = None,
+        object_id: str | None = None,
+        commit_id: str | None = None,
+        url: str | None = None,
+        content: str | None = None,
+        original_object_id: str | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
+
 class CommentPosition:
     line: int
     offset: int

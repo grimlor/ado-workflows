@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.formatting import CommentFormatter, format_comment
 from ado_workflows.iterations import get_latest_iteration_context
 from ado_workflows.models import (
@@ -294,10 +295,8 @@ def post_comment(
     try:
         response = client.git.create_thread(thread, repository, pr_id, project=project)
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/threads",
-            raw_error=str(exc),
+        raise classify_ado_error(
+            exc, operation=f"post comment on PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
     return int(response.id)
@@ -373,13 +372,10 @@ def post_comments(
             )
             posted.append(thread_id)
         except Exception as exc:
-            err = ActionableError.internal(
-                service="ado-workflows",
-                operation="post_comment",
-                raw_error=str(exc),
-                suggestion=(
-                    f"Comment {i} failed to post. Check content, file path, and line number."
-                ),
+            err = classify_ado_error(
+                exc,
+                operation=f"post comment {i} on PR {pr_id}",
+                context_hint=str(pr_id),
             )
             err.context = {
                 "index": i,
@@ -439,10 +435,10 @@ def reply_to_comment(
             project=project,
         )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{repository}/pullrequests/{pr_id}/threads/{thread_id}/comments",
-            raw_error=str(exc),
+        raise classify_ado_error(
+            exc,
+            operation=f"reply to thread {thread_id} on PR {pr_id}",
+            context_hint=str(thread_id),
         ) from exc
 
     return int(response.id)
@@ -510,10 +506,10 @@ def resolve_comments(
             )
             resolved.append(tid)
         except Exception as exc:
-            err = ActionableError.internal(
-                service="AzureDevOps",
-                operation=f"resolve_thread({tid})",
-                raw_error=str(exc),
+            err = classify_ado_error(
+                exc,
+                operation=f"resolve thread {tid} on PR {pr_id}",
+                context_hint=str(tid),
             )
             err.context = {"thread_id": tid}
             errors.append(err)
@@ -690,10 +686,10 @@ def post_rich_comments(
                         )
                     )
             except Exception as exc:
-                err = ActionableError.internal(
-                    service="ado-workflows",
-                    operation="post_rich_comment",
-                    raw_error=str(exc),
+                err = classify_ado_error(
+                    exc,
+                    operation=f"post rich comment '{comment.comment_id}' on PR",
+                    context_hint=comment.comment_id or "",
                 )
                 err.context = {"comment_id": comment.comment_id}
                 failures.append(err)

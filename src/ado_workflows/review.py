@@ -22,6 +22,7 @@ from azure.devops.v7_1.git.models import (
     GitPullRequestSearchCriteria,
 )
 
+from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import (
     ApprovalStatus,
     PendingPR,
@@ -75,15 +76,10 @@ def fetch_required_approvals(
             artifact_id,
         )
     except Exception as exc:
-        raise ActionableError.internal(
-            service="AzureDevOps",
-            operation=f"fetch_required_approvals(PR {pr_id})",
-            raw_error=str(exc),
-            suggestion=(
-                f"Policy API unavailable for PR {pr_id}; "
-                f"caller should fall back to default of "
-                f"{default_required_approvals} approvals."
-            ),
+        raise classify_ado_error(
+            exc,
+            operation=f"fetch required approvals for PR {pr_id}",
+            context_hint=str(pr_id),
         ) from exc
 
     for evaluation in evaluations:
@@ -212,15 +208,10 @@ def get_review_status(
     try:
         pr = client.git.get_pull_request_by_id(pr_id)
     except Exception as exc:
-        raise ActionableError.not_found(
-            service="AzureDevOps",
-            resource_type="PullRequest",
-            resource_id=str(pr_id),
-            raw_error=str(exc),
-            suggestion=(
-                f"Verify PR {pr_id} exists and you have read access to "
-                f"project '{project}' in repository '{repository}'."
-            ),
+        raise classify_ado_error(
+            exc,
+            operation=f"get review status for PR {pr_id}",
+            context_hint=str(pr_id),
         ) from exc
 
     # Step 2 — Fetch commits (latest commit date for staleness detection)
@@ -251,15 +242,10 @@ def get_review_status(
                 stale_voter_ids = set(parsed.get("staleBecauseOfPush", []))
     except Exception as exc:
         warnings.append(
-            ActionableError.internal(
-                service="AzureDevOps",
-                operation=f"get_pull_request_properties(PR {pr_id})",
-                raw_error=str(exc),
-                suggestion=(
-                    "PR properties unavailable; tier-1 staleness detection "
-                    "(OneReviewPolicyPilot) skipped. Tier-2 (vote timestamp "
-                    "comparison) still active."
-                ),
+            classify_ado_error(
+                exc,
+                operation=f"get PR properties for PR {pr_id}",
+                context_hint=str(pr_id),
             )
         )
 
@@ -385,10 +371,10 @@ def analyze_pending_reviews(
             project=project,
         )
     except Exception as exc:
-        raise ActionableError.connection(
-            service="AzureDevOps",
-            url=f"{project}/{repository}/pullRequests",
-            raw_error=str(exc),
+        raise classify_ado_error(
+            exc,
+            operation=f"list active PRs in '{project}/{repository}'",
+            context_hint=repository,
         ) from exc
 
     # Step 2 — Filter: drafts, age, creator
@@ -425,10 +411,10 @@ def analyze_pending_reviews(
         except Exception as exc:
             pr_id: int = pr.pull_request_id
             skipped.append(
-                ActionableError.internal(
-                    service="AzureDevOps",
-                    operation=f"enrich_pr({pr_id})",
-                    raw_error=str(exc),
+                classify_ado_error(
+                    exc,
+                    operation=f"enrich PR {pr_id}",
+                    context_hint=str(pr_id),
                 )
             )
             continue
