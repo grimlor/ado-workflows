@@ -261,12 +261,12 @@ class TestClassifyAdoError:
             f"Expected error message to include \"list items at '/src'\", got: {error_str!r}"
         )
 
-    def test_ai_guidance_attached_with_suggestion_text(self) -> None:
+    def test_ai_guidance_attached_with_agent_specific_text(self) -> None:
         """
         Given any exception,
         When classify_ado_error is called,
-        Then the returned ActionableError has ai_guidance.action_required
-        matching the suggestion text.
+        Then the returned ActionableError has ai_guidance with agent-appropriate
+        text distinct from the user-facing suggestion.
         """
         # Given: a not-found error
         exc = Exception("TF401174: item missing")
@@ -274,12 +274,19 @@ class TestClassifyAdoError:
         # When: the classifier processes it
         result = classify_ado_error(exc, operation="get file", context_hint="/foo.py")
 
-        # Then: ai_guidance is attached and mirrors the suggestion
+        # Then: ai_guidance is attached with agent-specific text
         assert result.ai_guidance is not None, (
             "Expected ai_guidance to be attached by classify_ado_error, got None"
         )
-        assert result.ai_guidance.action_required == result.suggestion, (
-            f"Expected ai_guidance.action_required to match suggestion, "
-            f"got guidance={result.ai_guidance.action_required!r}, "
-            f"suggestion={result.suggestion!r}"
+        assert result.ai_guidance.action_required != result.suggestion, (
+            "Expected ai_guidance.action_required to differ from suggestion "
+            "(agent guidance should be distinct from user guidance)"
+        )
+        # And: agent guidance tells the agent what to do (try alternatives or ask user)
+        assert (
+            "listing the parent" in result.ai_guidance.action_required
+            or "ask" in result.ai_guidance.action_required.lower()
+        ), (
+            f"Expected agent guidance to suggest recovery actions, "
+            f"got: {result.ai_guidance.action_required!r}"
         )

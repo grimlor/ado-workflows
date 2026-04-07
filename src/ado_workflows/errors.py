@@ -58,7 +58,13 @@ def classify_ado_error(
             service="AzureDevOps",
             raw_error=f"Failed to {operation}: {error_str}",
             suggestion=suggestion,
-            ai_guidance=AIGuidance(action_required=suggestion),
+            ai_guidance=AIGuidance(
+                action_required=(
+                    f"Authentication failed while trying to {operation}. "
+                    f"Ask the user to re-authenticate — run `az login` or "
+                    f"refresh their PAT. You cannot fix this yourself."
+                ),
+            ),
         )
 
     # 2. Service errors — inspect structured type_key first, then message
@@ -78,7 +84,14 @@ def classify_ado_error(
                 resource_id=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
                 suggestion=suggestion,
-                ai_guidance=AIGuidance(action_required=suggestion),
+                ai_guidance=AIGuidance(
+                    action_required=(
+                        f"Resource not found while trying to {operation}. "
+                        f"Try listing the parent directory to discover valid "
+                        f"paths, or ask the user to verify the resource "
+                        f"exists.{hint_suffix}"
+                    ),
+                ),
             )
 
         # 2b. Permission/security by type_key
@@ -93,7 +106,15 @@ def classify_ado_error(
                 resource=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
                 suggestion=suggestion,
-                ai_guidance=AIGuidance(action_required=suggestion),
+                ai_guidance=AIGuidance(
+                    action_required=(
+                        f"Permission denied while trying to {operation}. "
+                        f"Ask the user to check that their PAT has the "
+                        f"required scopes (Code Read/Write) and that they "
+                        f"have access to the project. You cannot escalate "
+                        f"permissions yourself."
+                    ),
+                ),
             )
 
         # 2c. Not-found by message fallback (for errors without typed type_key)
@@ -109,7 +130,14 @@ def classify_ado_error(
                 resource_id=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
                 suggestion=suggestion,
-                ai_guidance=AIGuidance(action_required=suggestion),
+                ai_guidance=AIGuidance(
+                    action_required=(
+                        f"Resource not found while trying to {operation}. "
+                        f"Try listing the parent directory to discover valid "
+                        f"paths, or ask the user to verify the resource "
+                        f"exists.{hint_suffix}"
+                    ),
+                ),
             )
 
         # 2d. Unclassified service error → internal
@@ -123,7 +151,14 @@ def classify_ado_error(
             operation=operation,
             raw_error=error_str,
             suggestion=suggestion,
-            ai_guidance=AIGuidance(action_required=suggestion),
+            ai_guidance=AIGuidance(
+                action_required=(
+                    f"Server error while trying to {operation}. "
+                    f"Retry the operation once. If it fails again, report "
+                    f"the error to the user and suggest checking Azure "
+                    f"DevOps service health."
+                ),
+            ),
         )
 
     # 3. Not-found by message (non-ADO exceptions, e.g., generic Exception)
@@ -139,7 +174,14 @@ def classify_ado_error(
             resource_id=context_hint or operation,
             raw_error=f"Failed to {operation}: {error_str}",
             suggestion=suggestion,
-            ai_guidance=AIGuidance(action_required=suggestion),
+            ai_guidance=AIGuidance(
+                action_required=(
+                    f"Resource not found while trying to {operation}. "
+                    f"Try listing the parent directory to discover valid "
+                    f"paths, or ask the user to verify the resource "
+                    f"exists.{hint_suffix}"
+                ),
+            ),
         )
 
     # 4. Everything else — connection/network
@@ -152,7 +194,13 @@ def classify_ado_error(
         url=operation,
         raw_error=f"Failed to {operation}: {error_str}",
         suggestion=suggestion,
-        ai_guidance=AIGuidance(action_required=suggestion),
+        ai_guidance=AIGuidance(
+            action_required=(
+                f"Connection error while trying to {operation}. "
+                f"Retry the operation once. If it persists, ask the user "
+                f"to check their network connectivity to Azure DevOps."
+            ),
+        ),
     )
 
 
