@@ -9,7 +9,7 @@ error kind available.
 
 from __future__ import annotations
 
-from actionable_errors import ActionableError
+from actionable_errors import ActionableError, AIGuidance
 from azure.devops.exceptions import (
     AzureDevOpsAuthenticationError,
     AzureDevOpsServiceError,
@@ -49,14 +49,16 @@ def classify_ado_error(
 
     # 1. Authentication errors — distinct SDK exception class
     if isinstance(exc, AzureDevOpsAuthenticationError):
+        suggestion = (
+            f"Authentication failed while trying to {operation}. "
+            f"Check that your PAT or Azure CLI token has not expired and "
+            f"has the required scopes.{hint_suffix}"
+        )
         return ActionableError.authentication(
             service="AzureDevOps",
             raw_error=f"Failed to {operation}: {error_str}",
-            suggestion=(
-                f"Authentication failed while trying to {operation}. "
-                f"Check that your PAT or Azure CLI token has not expired and "
-                f"has the required scopes.{hint_suffix}"
-            ),
+            suggestion=suggestion,
+            ai_guidance=AIGuidance(action_required=suggestion),
         )
 
     # 2. Service errors — inspect structured type_key first, then message
@@ -65,80 +67,92 @@ def classify_ado_error(
 
         # 2a. Not-found by type_key
         if "NotFound" in type_key:
+            suggestion = (
+                f"The resource was not found while trying to {operation}. "
+                f"Verify the path, repository name, and branch reference "
+                f"are correct.{hint_suffix}"
+            )
             return ActionableError.not_found(
                 service="AzureDevOps",
                 resource_type="item",
                 resource_id=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
-                suggestion=(
-                    f"The resource was not found while trying to {operation}. "
-                    f"Verify the path, repository name, and branch reference "
-                    f"are correct.{hint_suffix}"
-                ),
+                suggestion=suggestion,
+                ai_guidance=AIGuidance(action_required=suggestion),
             )
 
         # 2b. Permission/security by type_key
         if any(marker in type_key for marker in _PERMISSION_TYPE_KEYS):
+            suggestion = (
+                f"Access denied while trying to {operation}. "
+                f"Check that your PAT has the Code (Read) scope and "
+                f"you have access to the project.{hint_suffix}"
+            )
             return ActionableError.permission(
                 service="AzureDevOps",
                 resource=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
-                suggestion=(
-                    f"Access denied while trying to {operation}. "
-                    f"Check that your PAT has the Code (Read) scope and "
-                    f"you have access to the project.{hint_suffix}"
-                ),
+                suggestion=suggestion,
+                ai_guidance=AIGuidance(action_required=suggestion),
             )
 
         # 2c. Not-found by message fallback (for errors without typed type_key)
         if _is_not_found_message(error_str):
+            suggestion = (
+                f"The resource was not found while trying to {operation}. "
+                f"Verify the path, repository name, and branch reference "
+                f"are correct.{hint_suffix}"
+            )
             return ActionableError.not_found(
                 service="AzureDevOps",
                 resource_type="item",
                 resource_id=context_hint or operation,
                 raw_error=f"Failed to {operation}: {error_str}",
-                suggestion=(
-                    f"The resource was not found while trying to {operation}. "
-                    f"Verify the path, repository name, and branch reference "
-                    f"are correct.{hint_suffix}"
-                ),
+                suggestion=suggestion,
+                ai_guidance=AIGuidance(action_required=suggestion),
             )
 
         # 2d. Unclassified service error → internal
+        suggestion = (
+            f"An unexpected server error occurred while trying to "
+            f"{operation}. This may be transient — retry the operation. "
+            f"If it persists, check Azure DevOps service health.{hint_suffix}"
+        )
         return ActionableError.internal(
             service="AzureDevOps",
             operation=operation,
             raw_error=error_str,
-            suggestion=(
-                f"An unexpected server error occurred while trying to "
-                f"{operation}. This may be transient — retry the operation. "
-                f"If it persists, check Azure DevOps service health.{hint_suffix}"
-            ),
+            suggestion=suggestion,
+            ai_guidance=AIGuidance(action_required=suggestion),
         )
 
     # 3. Not-found by message (non-ADO exceptions, e.g., generic Exception)
     if _is_not_found_message(error_str):
+        suggestion = (
+            f"The resource was not found while trying to {operation}. "
+            f"Verify the path, repository name, and branch reference "
+            f"are correct.{hint_suffix}"
+        )
         return ActionableError.not_found(
             service="AzureDevOps",
             resource_type="item",
             resource_id=context_hint or operation,
             raw_error=f"Failed to {operation}: {error_str}",
-            suggestion=(
-                f"The resource was not found while trying to {operation}. "
-                f"Verify the path, repository name, and branch reference "
-                f"are correct.{hint_suffix}"
-            ),
+            suggestion=suggestion,
+            ai_guidance=AIGuidance(action_required=suggestion),
         )
 
     # 4. Everything else — connection/network
+    suggestion = (
+        f"A connection error occurred while trying to {operation}. "
+        f"Check network connectivity to Azure DevOps.{hint_suffix}"
+    )
     return ActionableError.connection(
         service="AzureDevOps",
         url=operation,
         raw_error=f"Failed to {operation}: {error_str}",
-        suggestion=(
-            f"A connection error occurred while trying to {operation}. "
-            f"Check network connectivity to Azure DevOps.{hint_suffix}"
-        ),
+        suggestion=suggestion,
+        ai_guidance=AIGuidance(action_required=suggestion),
     )
 
 

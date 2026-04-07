@@ -260,3 +260,26 @@ class TestClassifyAdoError:
         assert "list items at '/src'" in error_str, (
             f"Expected error message to include \"list items at '/src'\", got: {error_str!r}"
         )
+
+    def test_ai_guidance_attached_with_suggestion_text(self) -> None:
+        """
+        Given any exception,
+        When classify_ado_error is called,
+        Then the returned ActionableError has ai_guidance.action_required
+        matching the suggestion text.
+        """
+        # Given: a not-found error
+        exc = Exception("TF401174: item missing")
+
+        # When: the classifier processes it
+        result = classify_ado_error(exc, operation="get file", context_hint="/foo.py")
+
+        # Then: ai_guidance is attached and mirrors the suggestion
+        assert result.ai_guidance is not None, (
+            "Expected ai_guidance to be attached by classify_ado_error, got None"
+        )
+        assert result.ai_guidance.action_required == result.suggestion, (
+            f"Expected ai_guidance.action_required to match suggestion, "
+            f"got guidance={result.ai_guidance.action_required!r}, "
+            f"suggestion={result.suggestion!r}"
+        )
