@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.9.0 (2026-04-07)
+
+### Features
+
+- **errors**: Attach AIGuidance to every classified error\n\nclassify_ado_error now sets
+  ai_guidance.action_required to match\nthe suggestion text on every ActionableError it produces.
+  This\nprovides AI agents with structured guidance at the library level,\nremoving the need for MCP
+  tools to apply generic fallback guidance.\n\n422 tests, 100% coverage, task check green."
+  ([`a06bd4d`](https://github.com/grimlor/ado-workflows/commit/a06bd4d96d0c9cc1220079f8bfebbf978a40834b))
+
+### Refactoring
+
+- **errors**: Differentiate AI guidance from user suggestions\n\nclassify_ado_error now provides
+  distinct ai_guidance text tailored\nto what the AI agent can do vs what requires human
+  intervention:\n- authentication/permission: \"ask the user to...\"\n- not_found: \"try listing the
+  parent directory, or ask the user...\"\n- connection/internal: \"retry once, then ask the
+  user...\"\n\nThe user-facing suggestion remains unchanged.\n\n422 tests, 100% coverage, task check
+  green."
+  ([`6acfea9`](https://github.com/grimlor/ado-workflows/commit/6acfea93afc2de1378ca07de360f9cab2c744177))
+
+
 ## v0.8.0 (2026-04-07)
 
 ### Chores
