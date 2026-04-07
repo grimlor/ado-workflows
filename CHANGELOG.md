@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.8.0 (2026-04-07)
+
+### Chores
+
+- Update uv.lock
+  ([`a577895`](https://github.com/grimlor/ado-workflows/commit/a5778958d4eacfa90a4b40abaf1ed39e211e53ad))
+
+### Features
+
+- **content**: Add list_repo_items and classify_ado_error\n\nFR5a — Remote Repository Content
+  Inspection (library layer).\n\nNew public API:\n- list_repo_items() — list files/folders at any
+  path on any branch,\n commit, or tag via client.git.get_items()\n- classify_ado_error() — shared
+  error classifier that maps ADO SDK\n exceptions to structured ActionableError kinds
+  (authentication,\n not_found, permission, connection, internal)\n- RepoItem dataclass — frozen,
+  None-safe mapping of SDK GitItem\n\nRefactored ~30 catch blocks across 8 modules to
+  use\nclassify_ado_error, replacing ad-hoc ActionableError.connection()\ncatch-alls with proper
+  error classification.\n\nNew type stubs: GitItem, get_items(), exceptions.pyi.\n\n421 tests, 100%
+  statement + branch coverage, task check green."
+  ([`07453a5`](https://github.com/grimlor/ado-workflows/commit/07453a53b34f36fab92de595f786ed6821feca25))
+
+
 ## v0.7.2 (2026-04-05)
 
 ### Bug Fixes
