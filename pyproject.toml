@@ -37,6 +37,7 @@ dev = [
     "pytest>=8,<9",
     "pytest-asyncio>=0.24,<1",
     "pytest-cov>=6,<7",
+    "pytest-xdist>=3,<4",
     "ruff>=0.8,<1",
     "taskipy>=1.14,<2",
     "pre-commit>=4,<5",
@@ -145,7 +146,7 @@ asyncio_mode = "auto"
 python_files = ["*_test.py", "test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --strict-markers -m 'not integration and not live'"
+addopts = "-v --strict-markers -m 'not integration and not live' -n auto"
 markers = [
     "integration: marks tests requiring external services",
     "live: marks tests requiring live network access",
