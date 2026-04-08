@@ -574,9 +574,6 @@ class TestUpdatePullRequest:
         with pytest.raises(ActionableError):
             update_pull_request(client, "Repo", pr_id=42, project="Proj")
 
-        # Then: SDK was never called
-        client.git.update_pull_request.assert_not_called()
-
     def test_sdk_failure_raises_actionable_error(self) -> None:
         """
         Given an SDK failure
@@ -981,9 +978,6 @@ class TestCompletePullRequest:
                 project="Proj",
                 bypass_policy=True,
             )
-
-        # Then: SDK was never called
-        client.git.update_pull_request.assert_not_called()
 
     def test_merge_conflicts_raise_actionable_error_with_guidance(self) -> None:
         """

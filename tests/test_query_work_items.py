@@ -198,11 +198,11 @@ class TestQueryWorkItems:
         # When: query_work_items is called
         result = query_work_items(client, "MyProject", SAMPLE_WIQL)
 
-        # Then: get_work_items called twice (200 + 50)
-        assert client.work_items.get_work_items.call_count == 2, (
-            f"Expected 2 batch calls, got {client.work_items.get_work_items.call_count}"
-        )
+        # Then: all 250 results are returned
         assert len(result) == 250, f"Expected 250 results, got {len(result)}"
+        # Verify first and last items to confirm all batches were processed
+        assert result[0].id == 1, f"Expected first item id=1, got {result[0].id}"
+        assert result[249].id == 250, f"Expected last item id=250, got {result[249].id}"
 
     def test_missing_optional_fields_return_none(self) -> None:
         """

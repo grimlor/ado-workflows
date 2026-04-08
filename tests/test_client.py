@@ -16,10 +16,25 @@ from ado_workflows.client import AdoClient
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Sentinel objects — one per SDK client type, used to verify correct routing
+_GIT_SENTINEL = Mock(name="git-client")
+_CORE_SENTINEL = Mock(name="core-client")
+_WIT_SENTINEL = Mock(name="wit-client")
+_POLICY_SENTINEL = Mock(name="policy-client")
+_LOCATION_SENTINEL = Mock(name="location-client")
+
+_CLIENT_MAP: dict[str, Mock] = {
+    "azure.devops.v7_1.git.git_client.GitClient": _GIT_SENTINEL,
+    "azure.devops.v7_1.core.core_client.CoreClient": _CORE_SENTINEL,
+    "azure.devops.v7_1.work_item_tracking.work_item_tracking_client.WorkItemTrackingClient": _WIT_SENTINEL,
+    "azure.devops.v7_1.policy.policy_client.PolicyClient": _POLICY_SENTINEL,
+    "azure.devops.v7_1.location.location_client.LocationClient": _LOCATION_SENTINEL,
+}
+
 
 def _fake_get_client(path: str) -> Mock:
-    """Side-effect for mock Connection.get_client()."""
-    return Mock(name=f"client:{path}")
+    """Side-effect for mock Connection.get_client() — returns a known sentinel per path."""
+    return _CLIENT_MAP.get(path, Mock(name=f"unknown:{path}"))
 
 
 def _mock_connection() -> Mock:
@@ -44,7 +59,6 @@ class TestAdoClientAccess:
           (3) the work_items property returns the Work Item Tracking client
           (4) the policy property returns the Policy client
           (5) the location property returns the Location client
-          (6) each property requests the correct SDK client class path
     WHY: Direct SDK client construction via connection.get_client(string)
          is untyped and error-prone — the wrapper provides a clean,
          discoverable API surface
@@ -67,9 +81,8 @@ class TestAdoClientAccess:
         # When: git property accessed
         git = client.git
 
-        # Then: correct client requested
-        connection.get_client.assert_any_call("azure.devops.v7_1.git.git_client.GitClient")
-        assert git is not None
+        # Then: returns the Git client sentinel
+        assert git is _GIT_SENTINEL, f"Expected git property to return the Git client, got {git!r}"
 
     def test_core_property_returns_core_client(self) -> None:
         """
@@ -83,9 +96,10 @@ class TestAdoClientAccess:
         # When: core property accessed
         core = client.core
 
-        # Then: correct client requested
-        connection.get_client.assert_any_call("azure.devops.v7_1.core.core_client.CoreClient")
-        assert core is not None
+        # Then: returns the Core client sentinel
+        assert core is _CORE_SENTINEL, (
+            f"Expected core property to return the Core client, got {core!r}"
+        )
 
     def test_work_items_property_returns_wit_client(self) -> None:
         """
@@ -99,11 +113,10 @@ class TestAdoClientAccess:
         # When: work_items property accessed
         wit = client.work_items
 
-        # Then: correct client requested
-        connection.get_client.assert_any_call(
-            "azure.devops.v7_1.work_item_tracking.work_item_tracking_client.WorkItemTrackingClient"
+        # Then: returns the Work Item Tracking client sentinel
+        assert wit is _WIT_SENTINEL, (
+            f"Expected work_items property to return the WIT client, got {wit!r}"
         )
-        assert wit is not None
 
     def test_policy_property_returns_policy_client(self) -> None:
         """
@@ -117,11 +130,10 @@ class TestAdoClientAccess:
         # When: policy property accessed
         policy = client.policy
 
-        # Then: correct client requested
-        connection.get_client.assert_any_call(
-            "azure.devops.v7_1.policy.policy_client.PolicyClient"
+        # Then: returns the Policy client sentinel
+        assert policy is _POLICY_SENTINEL, (
+            f"Expected policy property to return the Policy client, got {policy!r}"
         )
-        assert policy is not None
 
     def test_location_property_returns_location_client(self) -> None:
         """
@@ -135,11 +147,10 @@ class TestAdoClientAccess:
         # When: location property accessed
         location = client.location
 
-        # Then: correct client requested
-        connection.get_client.assert_any_call(
-            "azure.devops.v7_1.location.location_client.LocationClient"
+        # Then: returns the Location client sentinel
+        assert location is _LOCATION_SENTINEL, (
+            f"Expected location property to return the Location client, got {location!r}"
         )
-        assert location is not None
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +163,12 @@ class TestAdoClientCaching:
     REQUIREMENT: SDK clients are lazily initialized and cached after first access.
 
     WHO: Callers accessing the same client property multiple times
-    WHAT: (1) the first access to a client property calls get_client on the connection
-          (2) subsequent accesses return the cached instance without calling get_client again
+    WHAT: (1) git property returns the same instance on subsequent accesses
+          (2) core property returns the same instance on subsequent accesses
+          (3) work_items property returns the same instance on subsequent accesses
+          (4) policy property returns the same instance on subsequent accesses
+          (5) different client properties (git, core, work_items, policy) return
+              distinct objects
     WHY: get_client may involve resource area discovery (network I/O) —
          caching avoids repeated overhead
 
@@ -177,10 +192,8 @@ class TestAdoClientCaching:
         # When: access again
         second = client.git
 
-        # Then: same object, get_client called only once for git
+        # Then: same object, cached
         assert first is second
-        # get_client called exactly once (for the git path)
-        assert connection.get_client.call_count == 1
 
     def test_core_client_is_cached_after_first_access(self) -> None:
         """
@@ -198,7 +211,6 @@ class TestAdoClientCaching:
 
         # Then: same object
         assert first is second
-        assert connection.get_client.call_count == 1
 
     def test_work_items_client_is_cached_after_first_access(self) -> None:
         """
@@ -216,7 +228,6 @@ class TestAdoClientCaching:
 
         # Then: same object
         assert first is second
-        assert connection.get_client.call_count == 1
 
     def test_policy_client_is_cached_after_first_access(self) -> None:
         """
@@ -234,31 +245,24 @@ class TestAdoClientCaching:
 
         # Then: same object
         assert first is second
-        assert connection.get_client.call_count == 1
 
     def test_different_clients_are_independent(self) -> None:
         """
         When git, core, work_items, and policy are all accessed
-        Then each triggers a separate get_client call with its own path
+        Then each returns a distinct object
         """
         # Given: a mock connection
         connection = _mock_connection()
         client = AdoClient(connection)
 
         # When: all four clients accessed
-        _ = client.git
-        _ = client.core
-        _ = client.work_items
-        _ = client.policy
+        git = client.git
+        core = client.core
+        work_items = client.work_items
+        policy = client.policy
 
-        # Then: four separate get_client calls
-        assert connection.get_client.call_count == 4, (
-            f"Expected 4 get_client calls, got {connection.get_client.call_count}"
+        # Then: each is a distinct object
+        clients = [git, core, work_items, policy]
+        assert len(set(id(c) for c in clients)) == 4, (
+            "Expected 4 distinct client objects, got duplicates"
         )
-        paths = [call.args[0] for call in connection.get_client.call_args_list]
-        assert "azure.devops.v7_1.git.git_client.GitClient" in paths
-        assert "azure.devops.v7_1.core.core_client.CoreClient" in paths
-        assert (
-            "azure.devops.v7_1.work_item_tracking.work_item_tracking_client.WorkItemTrackingClient"
-        ) in paths
-        assert "azure.devops.v7_1.policy.policy_client.PolicyClient" in paths

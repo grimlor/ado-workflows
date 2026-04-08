@@ -174,18 +174,19 @@ class TestGetFileContent:
         """
         Given no version specified,
         When get_file_content is called,
-        Then the SDK is called without a version descriptor (uses default branch).
+        Then it returns FileContent with the file's content (using default branch).
         """
         # Given: no version specified
         client = _mock_client()
 
         # When: get_file_content is called without version
-        get_file_content(client, "MyRepo", "src/app.py", "MyProject")
+        result = get_file_content(client, "MyRepo", "src/app.py", "MyProject")
 
-        # Then: SDK called - verify it was invoked (version handling is implementation detail)
-        assert client.git.get_item_content.call_count == 1, (
-            f"Expected 1 SDK call, got {client.git.get_item_content.call_count}"
+        # Then: returns FileContent successfully
+        assert isinstance(result, FileContent), (
+            f"Expected FileContent, got {type(result).__name__}"
         )
+        assert result.path == "src/app.py", f"Expected path='src/app.py', got {result.path!r}"
 
     def test_binary_file_returns_file_content_with_encoding_note(self) -> None:
         """

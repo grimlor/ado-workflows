@@ -190,37 +190,43 @@ class TestListPullRequests:
         """
         Given repository_id is provided,
         When called,
-        Then uses get_pull_requests() scoped to that repository.
+        Then returns PRs from the repo-scoped search.
         """
-        # Given: SDK configured for repo-scoped call
-        client = _mock_client([])
+        # Given: repo-scoped SDK returns a specific PR
+        repo_pr = _sdk_pr(pr_id=100, title="Repo-scoped PR")
+        client = _mock_client([repo_pr])
 
         # When: called with an explicit repository_id
-        list_pull_requests(
+        result = list_pull_requests(
             client,
             "MyProject",
             repository_id="my-repo-guid",
         )
 
-        # Then: get_pull_requests (repo-scoped) was called, not the project-scoped variant
-        client.git.get_pull_requests.assert_called_once()
-        client.git.get_pull_requests_by_project.assert_not_called()
+        # Then: returns the repo-scoped PR
+        assert len(result) == 1, f"Expected 1 PR, got {len(result)}"
+        assert result[0].pr_id == 100, (
+            f"Expected pr_id=100 from repo-scoped search, got {result[0].pr_id}"
+        )
 
     def test_no_repository_id_routes_to_project_scoped_method(self) -> None:
         """
         Given no repository_id,
         When called,
-        Then uses get_pull_requests_by_project() for project-wide search.
+        Then returns PRs from the project-wide search.
         """
-        # Given: SDK configured for project-scoped call
-        client = _mock_client([], use_project_scope=True)
+        # Given: project-scoped SDK returns a specific PR
+        project_pr = _sdk_pr(pr_id=200, title="Project-scoped PR")
+        client = _mock_client([project_pr], use_project_scope=True)
 
         # When: called without repository_id
-        list_pull_requests(client, "MyProject")
+        result = list_pull_requests(client, "MyProject")
 
-        # Then: get_pull_requests_by_project (project-scoped) was called
-        client.git.get_pull_requests_by_project.assert_called_once()
-        client.git.get_pull_requests.assert_not_called()
+        # Then: returns the project-scoped PR
+        assert len(result) == 1, f"Expected 1 PR, got {len(result)}"
+        assert result[0].pr_id == 200, (
+            f"Expected pr_id=200 from project-scoped search, got {result[0].pr_id}"
+        )
 
     def test_reviewer_id_included_in_search_criteria(self) -> None:
         """

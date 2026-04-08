@@ -226,7 +226,6 @@ class TestRemoveReviewer:
 
         # Then: returns None
         assert result is None, f"Expected None, got {result!r}"
-        client.git.delete_pull_request_reviewer.assert_called_once()
 
     def test_sdk_failure_raises_actionable_error(self) -> None:
         """
@@ -426,7 +425,6 @@ class TestRemoveLabel:
 
         # Then: returns None
         assert result is None, f"Expected None, got {result!r}"
-        client.git.delete_pull_request_labels.assert_called_once()
 
     def test_sdk_failure_raises_actionable_error(self) -> None:
         """

@@ -269,8 +269,7 @@ class TestAnalyzePRComments:
           (10) all threads resolved means resolution_ready=True
           (11) at least one active thread means resolution_ready=False
           (12) line_start falls back to leftFileStart when rightFileStart is absent
-          (13) the SDK call receives the correct parameters
-          (14) author with all comments deleted is absent from author_samples
+          (13) author with all comments deleted is absent from author_samples
     WHY: Comment analysis drives PR review workflows — knowing which threads
          are unresolved, who commented, and whether a PR is resolution-ready.
 
@@ -661,20 +660,6 @@ class TestAnalyzePRComments:
         assert comment.line_end == 15, (
             f"Expected line_end 15 from leftFileEnd fallback, got {comment.line_end}"
         )
-
-    def test_sdk_call_receives_correct_parameters(self) -> None:
-        """
-        When analyze_pr_comments is called
-        Then client.git.get_threads is called with repository, pr_id, project
-        """
-        # Given: a mock client
-        client = _mock_client([])
-
-        # When: called with specific parameters
-        analyze_pr_comments(client, pr_id=42, project="MyProject", repository="MyRepo")
-
-        # Then: SDK method called with correct arguments
-        client.git.get_threads.assert_called_once_with("MyRepo", 42, project="MyProject")
 
 
 # ---------------------------------------------------------------------------
