@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -522,6 +522,43 @@ class WorkItemSummary:
     completed_work: float | None
     remaining_work: float | None
     url: str
+
+
+@dataclass(frozen=True)
+class WorkItemDetail:
+    """
+    Full work item data — richer than WorkItemSummary.
+
+    Carries well-typed common fields shared across all ADO work item
+    types, plus a raw ``fields`` dict for type-specific access.
+    Work item types vary per project (PBIs have Effort, Bugs have
+    Severity, Tasks have Activity, etc.), so the library cannot
+    enumerate every field — the dict provides generic access while
+    the named attributes cover the universals.
+    """
+
+    id: int
+    title: str
+    state: str
+    work_item_type: str
+    assigned_to: str | None
+    area_path: str | None
+    iteration_path: str | None
+    completed_work: float | None
+    remaining_work: float | None
+    parent_id: int | None
+    url: str
+    fields: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class WorkItemFieldInfo:
+    """Field metadata for an ADO work item type."""
+
+    name: str
+    reference_name: str
+    field_type: str
+    is_required: bool
 
 
 @dataclass(frozen=True)

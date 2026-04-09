@@ -9,14 +9,12 @@ class PolicyTypeRef:
     id: str | None
     url: str | None
 
-
 class PolicyConfiguration:
     type: PolicyTypeRef
     settings: dict[str, Any]
     id: int | None
     is_enabled: bool | None
     is_blocking: bool | None
-
 
 class PolicyEvaluationRecord:
     configuration: PolicyConfiguration

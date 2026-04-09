@@ -55,7 +55,13 @@ from ado_workflows.lifecycle import (
     set_draft_status,
     update_pull_request,
 )
-from ado_workflows.listing import list_commits, list_pull_requests, query_work_items
+from ado_workflows.listing import (
+    get_work_item,
+    get_work_items,
+    list_commits,
+    list_pull_requests,
+    query_work_items,
+)
 from ado_workflows.models import (
     VOTE_TEXT,
     ApprovalStatus,
@@ -90,8 +96,17 @@ from ado_workflows.models import (
     RichPostingResult,
     UserIdentity,
     VoteStatus,
+    WorkItemDetail,
+    WorkItemFieldInfo,
     WorkItemRef,
     WorkItemSummary,
+)
+from ado_workflows.mutations import (
+    clone_work_item,
+    create_work_item,
+    get_work_item_type_fields,
+    move_work_items_to_sprint,
+    update_work_item,
 )
 from ado_workflows.parsing import parse_ado_date, parse_ado_url
 from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context, get_pr_author
@@ -144,6 +159,8 @@ __all__: list[str] = [
     "RichPostingResult",
     "UserIdentity",
     "VoteStatus",
+    "WorkItemDetail",
+    "WorkItemFieldInfo",
     "WorkItemRef",
     "WorkItemSummary",
     "abandon_pull_request",
@@ -153,8 +170,10 @@ __all__: list[str] = [
     "analyze_pr_comments",
     "classify_ado_error",
     "clear_repository_context",
+    "clone_work_item",
     "complete_pull_request",
     "create_pull_request",
+    "create_work_item",
     "deduplicate_team_containers",
     "default_comment_formatter",
     "determine_vote_status",
@@ -171,6 +190,9 @@ __all__: list[str] = [
     "get_pull_request",
     "get_repository_context",
     "get_review_status",
+    "get_work_item",
+    "get_work_item_type_fields",
+    "get_work_items",
     "infer_target_repository",
     "inspect_git_repository",
     "is_praise_comment",
@@ -179,6 +201,7 @@ __all__: list[str] = [
     "list_pull_requests",
     "list_repo_items",
     "list_reviewers",
+    "move_work_items_to_sprint",
     "parse_ado_date",
     "parse_ado_url",
     "post_comment",
@@ -194,4 +217,5 @@ __all__: list[str] = [
     "set_draft_status",
     "set_repository_context",
     "update_pull_request",
+    "update_work_item",
 ]

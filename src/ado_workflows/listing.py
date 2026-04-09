@@ -16,8 +16,9 @@ from azure.devops.v7_1.git.models import GitPullRequest, GitPullRequestSearchCri
 from azure.devops.v7_1.work_item_tracking.models import TeamContext, Wiql, WorkItem
 from git import Repo
 
+from ado_workflows._mapping import map_work_item_detail
 from ado_workflows.errors import classify_ado_error
-from ado_workflows.models import CommitSummary, PullRequestSummary, WorkItemSummary
+from ado_workflows.models import CommitSummary, PullRequestSummary, WorkItemDetail, WorkItemSummary
 
 if TYPE_CHECKING:
     from ado_workflows.client import AdoClient
@@ -107,6 +108,88 @@ def _map_pr_summary(pr: GitPullRequest) -> PullRequestSummary:
         is_draft=pr.is_draft,
         merge_status=pr.merge_status or "",
     )
+
+
+# ---------------------------------------------------------------------------
+# Work item fetch by ID — FR6a read operations
+# ---------------------------------------------------------------------------
+
+
+def get_work_item(
+    client: AdoClient,
+    project: str,
+    work_item_id: int,
+) -> WorkItemDetail:
+    """
+    Fetch a single work item by ID with full field data.
+
+    Wraps ``client.work_items.get_work_item()`` with ``expand="All"``
+    to retrieve all fields and relations.
+
+    Returns:
+        A single :class:`WorkItemDetail`.
+
+    Raises:
+        ActionableError: When the SDK call fails.
+
+    """
+    try:
+        raw = client.work_items.get_work_item(
+            work_item_id,
+            project=project,
+            expand="All",
+        )
+    except Exception as exc:
+        raise classify_ado_error(
+            exc,
+            operation=f"fetch work item {work_item_id} in '{project}'",
+            context_hint=project,
+        ) from exc
+
+    return map_work_item_detail(raw)
+
+
+def get_work_items(
+    client: AdoClient,
+    project: str,
+    work_item_ids: list[int],
+) -> list[WorkItemDetail]:
+    """
+    Batch-fetch multiple work items by ID with full field data.
+
+    Fetches in chunks of 200 (the ADO API batch limit) with
+    ``expand="All"`` for full fields and relations. Returns an
+    empty list when *work_item_ids* is empty, without making
+    any SDK calls.
+
+    Returns:
+        List of :class:`WorkItemDetail`.
+
+    Raises:
+        ActionableError: When the SDK call fails.
+
+    """
+    if not work_item_ids:
+        return []
+
+    items: list[WorkItemDetail] = []
+    for i in range(0, len(work_item_ids), _BATCH_SIZE):
+        batch_ids = work_item_ids[i : i + _BATCH_SIZE]
+        try:
+            raw_items = client.work_items.get_work_items(
+                batch_ids,
+                project=project,
+                expand="All",
+            )
+        except Exception as exc:
+            raise classify_ado_error(
+                exc,
+                operation=f"fetch work items in '{project}'",
+                context_hint=project,
+            ) from exc
+        items.extend(map_work_item_detail(wi) for wi in raw_items)
+
+    return items
 
 
 # ---------------------------------------------------------------------------

@@ -50,8 +50,8 @@ Repository = "https://github.com/grimlor/ado-workflows"
 # Taskipy
 # ---------------------------------------------------------------------------
 [tool.taskipy.tasks]
-lint   = "uv run ruff check --fix src/ tests/"
-format = "uv run ruff format src/ tests/"
+lint   = "uv run ruff check --fix src/ tests/ typings/"
+format = "uv run ruff format src/ tests/ typings/"
 type   = "uv run pyright src/ tests/"
 test   = "uv run pytest tests/ -v"
 cov    = "uv run pytest tests/ --cov=ado_workflows --cov-branch --cov-report=term-missing"
@@ -102,6 +102,7 @@ combine-as-imports = true
     "D415",     # same as D400
     "D401",     # fixture docstrings are descriptive, not imperative
 ]
+"typings/**" = ["N"]  # stub files follow SDK naming, not our conventions
 
 [tool.ruff.format]
 quote-style = "double"

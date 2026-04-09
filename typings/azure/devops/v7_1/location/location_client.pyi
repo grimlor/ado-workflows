@@ -8,10 +8,8 @@ class _AuthenticatedUser:
     id: str
     descriptor: str | None
 
-
 class _ConnectionData:
     authenticated_user: _AuthenticatedUser
-
 
 class LocationClient:
     def get_connection_data(self) -> _ConnectionData: ...

@@ -10,7 +10,6 @@ class IdentityRef:
     unique_name: str
     id: str
 
-
 class GitItem:
     path: str | None
     is_folder: bool | None
@@ -36,7 +35,6 @@ class GitItem:
         **kwargs: Any,
     ) -> None: ...
 
-
 class CommentPosition:
     line: int
     offset: int
@@ -46,7 +44,6 @@ class CommentPosition:
         line: int | None = None,
         offset: int | None = None,
     ) -> None: ...
-
 
 class CommentThreadContext:
     file_path: str | None
@@ -63,7 +60,6 @@ class CommentThreadContext:
         right_file_start: CommentPosition | None = None,
         right_file_end: CommentPosition | None = None,
     ) -> None: ...
-
 
 class Comment:
     author: IdentityRef
@@ -83,7 +79,6 @@ class Comment:
         published_date: str | None = None,
         **kwargs: Any,
     ) -> None: ...
-
 
 class GitPullRequestCommentThread:
     id: int
@@ -110,7 +105,6 @@ class GitPullRequestCommentThread:
         **kwargs: Any,
     ) -> None: ...
 
-
 class GitPullRequestSearchCriteria:
     status: str | None
     creator_id: str | None
@@ -124,10 +118,8 @@ class GitPullRequestSearchCriteria:
         **kwargs: Any,
     ) -> None: ...
 
-
 class _VotedForRef:
     id: str
-
 
 class IdentityRefWithVote:
     display_name: str | None
@@ -150,12 +142,10 @@ class IdentityRefWithVote:
         **kwargs: Any,
     ) -> None: ...
 
-
 class GitUserDate:
     date: datetime
     email: str | None
     name: str | None
-
 
 class GitCommitRef:
     author: GitUserDate
@@ -168,12 +158,10 @@ class GitCommitRef:
         **kwargs: Any,
     ) -> None: ...
 
-
 class GitRepository:
     name: str
     web_url: str
     id: str
-
 
 class GitPullRequest:
     pull_request_id: int
@@ -206,7 +194,6 @@ class GitPullRequest:
         **kwargs: Any,
     ) -> None: ...
 
-
 class CommentIterationContext:
     first_comparing_iteration: int
     second_comparing_iteration: int
@@ -217,7 +204,6 @@ class CommentIterationContext:
         second_comparing_iteration: int | None = None,
     ) -> None: ...
 
-
 class GitPullRequestCommentThreadContext:
     change_tracking_id: int
     iteration_context: CommentIterationContext | None
@@ -227,7 +213,6 @@ class GitPullRequestCommentThreadContext:
         change_tracking_id: int | None = None,
         iteration_context: CommentIterationContext | None = None,
     ) -> None: ...
-
 
 class GitPullRequestIteration:
     id: int
@@ -242,7 +227,6 @@ class GitPullRequestIteration:
         **kwargs: Any,
     ) -> None: ...
 
-
 class GitPullRequestChange:
     change_tracking_id: int
     additional_properties: dict[str, Any]
@@ -251,7 +235,6 @@ class GitPullRequestChange:
         *,
         change_tracking_id: int | None = None,
     ) -> None: ...
-
 
 class GitPullRequestIterationChanges:
     change_entries: list[GitPullRequestChange]
@@ -265,7 +248,6 @@ class GitPullRequestIterationChanges:
         next_top: int | None = None,
     ) -> None: ...
 
-
 class GitVersionDescriptor:
     version: str | None
     version_type: str | None
@@ -275,7 +257,6 @@ class GitVersionDescriptor:
         version: str | None = None,
         version_type: str | None = None,
     ) -> None: ...
-
 
 class GitPullRequestCompletionOptions:
     merge_strategy: str | None
@@ -296,13 +277,11 @@ class GitPullRequestCompletionOptions:
         **kwargs: Any,
     ) -> None: ...
 
-
 class WebApiTagDefinition:
     id: str
     name: str
     active: bool | None
     url: str | None
-
 
 class WebApiCreateTagRequestData:
     name: str
@@ -312,7 +291,6 @@ class WebApiCreateTagRequestData:
         name: str | None = None,
         **kwargs: Any,
     ) -> None: ...
-
 
 class ResourceRef:
     id: str

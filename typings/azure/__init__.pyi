@@ -1,4 +1,5 @@
-"""Partial type stubs for azure-devops SDK.
+"""
+Partial type stubs for azure-devops SDK.
 
 Only the types, methods, and attributes used by ado-workflows are stubbed.
 This keeps pyright strict-mode clean without suppressing Unknown-type rules

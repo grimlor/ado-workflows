@@ -26,7 +26,6 @@ class GitClient:
         pull_request_id: int,
         project: str | None = None,
     ) -> GitPullRequest: ...
-
     def get_pull_requests(
         self,
         repository_id: str,
@@ -36,7 +35,6 @@ class GitClient:
         skip: int | None = None,
         top: int | None = None,
     ) -> list[GitPullRequest]: ...
-
     def get_pull_requests_by_project(
         self,
         project: str,
@@ -45,7 +43,6 @@ class GitClient:
         skip: int | None = None,
         top: int | None = None,
     ) -> list[GitPullRequest]: ...
-
     def get_threads(
         self,
         repository_id: str,
@@ -54,7 +51,6 @@ class GitClient:
         iteration: int | None = None,
         base_iteration: int | None = None,
     ) -> list[GitPullRequestCommentThread]: ...
-
     def create_thread(
         self,
         comment_thread: GitPullRequestCommentThread,
@@ -62,7 +58,6 @@ class GitClient:
         pull_request_id: int,
         project: str | None = None,
     ) -> GitPullRequestCommentThread: ...
-
     def create_comment(
         self,
         comment: Comment,
@@ -71,7 +66,6 @@ class GitClient:
         thread_id: int,
         project: str | None = None,
     ) -> Comment: ...
-
     def update_thread(
         self,
         comment_thread: GitPullRequestCommentThread,
@@ -80,14 +74,12 @@ class GitClient:
         thread_id: int,
         project: str | None = None,
     ) -> GitPullRequestCommentThread: ...
-
     def create_pull_request(
         self,
         git_pull_request_to_create: GitPullRequest,
         repository_id: str,
         project: str | None = None,
     ) -> GitPullRequest: ...
-
     def update_pull_request(
         self,
         git_pull_request_to_update: GitPullRequest,
@@ -95,7 +87,6 @@ class GitClient:
         pull_request_id: int,
         project: str | None = None,
     ) -> GitPullRequest: ...
-
     def get_pull_request(
         self,
         repository_id: str,
@@ -104,7 +95,6 @@ class GitClient:
         include_commits: bool | None = None,
         include_work_item_refs: bool | None = None,
     ) -> GitPullRequest: ...
-
     def create_pull_request_reviewer(
         self,
         reviewer: IdentityRefWithVote,
@@ -113,7 +103,6 @@ class GitClient:
         reviewer_id: str,
         project: str | None = None,
     ) -> IdentityRefWithVote: ...
-
     def delete_pull_request_reviewer(
         self,
         repository_id: str,
@@ -121,14 +110,12 @@ class GitClient:
         reviewer_id: str,
         project: str | None = None,
     ) -> None: ...
-
     def get_pull_request_reviewers(
         self,
         repository_id: str,
         pull_request_id: int,
         project: str | None = None,
     ) -> list[IdentityRefWithVote]: ...
-
     def create_pull_request_label(
         self,
         label: WebApiCreateTagRequestData,
@@ -136,7 +123,6 @@ class GitClient:
         pull_request_id: int,
         project: str | None = None,
     ) -> WebApiTagDefinition: ...
-
     def delete_pull_request_labels(
         self,
         repository_id: str,
@@ -144,35 +130,30 @@ class GitClient:
         label_id_or_name: str,
         project: str | None = None,
     ) -> None: ...
-
     def get_pull_request_labels(
         self,
         repository_id: str,
         pull_request_id: int,
         project: str | None = None,
     ) -> list[WebApiTagDefinition]: ...
-
     def get_pull_request_work_item_refs(
         self,
         repository_id: str,
         pull_request_id: int,
         project: str | None = None,
     ) -> list[ResourceRef]: ...
-
     def get_pull_request_commits(
         self,
         repository_id: str,
         pull_request_id: int,
         project: str | None = None,
     ) -> list[GitCommitRef]: ...
-
     def get_pull_request_properties(
         self,
         repository_id: str,
         pull_request_id: int,
         project: str | None = None,
     ) -> dict[str, Any]: ...
-
     def get_repositories(
         self,
         project: str | None = None,
@@ -180,7 +161,6 @@ class GitClient:
         include_all_urls: bool | None = None,
         include_hidden: bool | None = None,
     ) -> list[Any]: ...
-
     def get_pull_request_iterations(
         self,
         repository_id: str,
@@ -188,7 +168,6 @@ class GitClient:
         project: str | None = None,
         include_commits: bool | None = None,
     ) -> list[GitPullRequestIteration]: ...
-
     def get_pull_request_iteration_changes(
         self,
         repository_id: str,
@@ -199,7 +178,6 @@ class GitClient:
         skip: int | None = None,
         compare_to: int | None = None,
     ) -> GitPullRequestIterationChanges: ...
-
     def get_items(
         self,
         repository_id: str,
@@ -213,7 +191,6 @@ class GitClient:
         version_descriptor: GitVersionDescriptor | None = None,
         zip_for_unix: bool | None = None,
     ) -> list[GitItem]: ...
-
     def get_item_content(
         self,
         repository_id: str,
