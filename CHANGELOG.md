@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v0.10.0 (2026-04-09)
+
+### Build System
+
+- Add pytest-xdist for parallel test execution
+  ([`2a168f6`](https://github.com/grimlor/ado-workflows/commit/2a168f64dced561b755c806f63afdcb28805f58f))
+
+### Features
+
+- **work-items**: Add FR6a work item mutations and refactor reads to WorkItemDetail
+  ([`1345f80`](https://github.com/grimlor/ado-workflows/commit/1345f803e75e942021f2151fb68ce0dc483324c8))
+
+### Testing
+
+- Replace mock call assertions with behavioral output assertions\n\nBDD audit — replace
+  implementation-detail mock assertions with\nobservable-behavior assertions across 8 test
+  files:\n\n- test_client.py: sentinel identity checks replace assert_any_call\n on SDK class paths;
+  WHAT clauses aligned to test counts\n- test_auth.py: factory tests assert returned connection,
+  not\n constructor arguments; caching call_count assertions kept\n (I/O avoidance is the behavioral
+  requirement)\n- test_content.py: returned FileContent replaces call_count\n- test_lifecycle.py:
+  removed redundant assert_not_called after\n pytest.raises (raise prevents subsequent execution)\n-
+  test_list_pull_requests.py: output data assertions replace\n assert_called/assert_not_called
+  routing checks\n- test_pr_management.py: removed redundant assert_called_once\n after successful
+  None return\n- test_query_work_items.py: output count+content replaces\n call_count for batch
+  verification\n- test_comments.py: removed SDK params test + WHAT clause (13)\n\n421 tests, 100%
+  coverage, task check green."
+  ([`c9f34b5`](https://github.com/grimlor/ado-workflows/commit/c9f34b5a20b5164363ab60a8e649c07e80173d3f))
+
+
 ## v0.9.0 (2026-04-07)
 
 ### Features
