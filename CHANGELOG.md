@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.11.0 (2026-04-13)
+
+### Chores
+
+- Committing lockfile
+  ([`9843389`](https://github.com/grimlor/ado-workflows/commit/98433896081d05e5843fe391fa4571319d7ea080))
+
+### Features
+
+- **lifecycle**: Add work item linking to PR create and update
+  ([`4d0bb8d`](https://github.com/grimlor/ado-workflows/commit/4d0bb8d1ca73bc6b7c1cfd059cc5af6edbd9f119))
+
+
 ## v0.10.0 (2026-04-09)
 
 ### Build System
