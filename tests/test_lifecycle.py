@@ -1017,3 +1017,315 @@ class TestCompletePullRequest:
 
         with pytest.raises(ActionableError):
             complete_pull_request(client, "Repo", pr_id=42, project="Proj")
+
+
+# ---------------------------------------------------------------------------
+# TestLinkWorkItemsToPR
+# ---------------------------------------------------------------------------
+
+
+class TestLinkWorkItemsToPR:
+    """
+    REQUIREMENT: Work items can be linked to a PR via artifact links.
+
+    WHO: Agents and automation creating/updating PRs.
+    WHAT: (1) Each work item ID gets an ArtifactLink relation pointing to the PR
+          (2) The artifact URI follows the vstfs Git PullRequestId format
+          (3) SDK errors on any single link raise ActionableError
+          (4) Empty or None work_item_ids is a no-op
+
+    MOCK BOUNDARY:
+        Mock:  client.work_items.update_work_item (WIT REST call)
+        Real:  artifact URI construction, JSON patch document building
+        Never: AdoClient itself
+    """
+
+    def test_each_work_item_gets_artifact_link(self) -> None:
+        """
+        Given valid PR metadata and two work item IDs
+        When link_work_items_to_pr is called
+        Then update_work_item is called once per work item with an ArtifactLink patch
+        """
+        # Given: a mock client with a working WIT endpoint
+        from ado_workflows.lifecycle import link_work_items_to_pr
+
+        client = Mock()
+        client.work_items.update_work_item.return_value = Mock()
+
+        # When: called with two work item IDs
+        link_work_items_to_pr(
+            client,
+            pr_id=42,
+            project="Proj",
+            project_id="proj-guid-1",
+            repository_id="repo-guid-2",
+            work_item_ids=[100, 200],
+        )
+
+        # Then: update_work_item was called twice — once per work item
+        assert client.work_items.update_work_item.call_count == 2, (
+            f"Expected 2 calls, got {client.work_items.update_work_item.call_count}"
+        )
+        # Verify the first call targeted work item 100
+        first_call = client.work_items.update_work_item.call_args_list[0]
+        assert first_call[0][1] == 100, (
+            f"Expected first call for work item 100, got {first_call[0][1]}"
+        )
+        # Verify the second call targeted work item 200
+        second_call = client.work_items.update_work_item.call_args_list[1]
+        assert second_call[0][1] == 200, (
+            f"Expected second call for work item 200, got {second_call[0][1]}"
+        )
+        # Verify the patch document contains an ArtifactLink operation
+        patch_doc = first_call[0][0]
+        assert len(patch_doc) == 1, f"Expected 1 patch op, got {len(patch_doc)}"
+        op = patch_doc[0]
+        assert op.op == "add", f"Expected op='add', got {op.op!r}"
+        assert op.path == "/relations/-", f"Expected path='/relations/-', got {op.path!r}"
+        assert op.value["rel"] == "ArtifactLink", (
+            f"Expected rel='ArtifactLink', got {op.value['rel']!r}"
+        )
+
+    def test_artifact_uri_follows_vstfs_format(self) -> None:
+        """
+        Given known project and repository GUIDs
+        When link_work_items_to_pr is called
+        Then the artifact URI matches vstfs:///Git/PullRequestId/{projectId}%2F{repoId}%2F{prId}
+        """
+        # Given: a mock client
+        from ado_workflows.lifecycle import link_work_items_to_pr
+
+        client = Mock()
+        client.work_items.update_work_item.return_value = Mock()
+
+        # When: called with known GUIDs
+        link_work_items_to_pr(
+            client,
+            pr_id=42,
+            project="Proj",
+            project_id="aaaa-bbbb",
+            repository_id="cccc-dddd",
+            work_item_ids=[100],
+        )
+
+        # Then: the artifact URI is correctly formatted
+        patch_doc = client.work_items.update_work_item.call_args[0][0]
+        artifact_url = patch_doc[0].value["url"]
+        expected = "vstfs:///Git/PullRequestId/aaaa-bbbb%2Fcccc-dddd%2F42"
+        assert artifact_url == expected, (
+            f"Expected artifact URI '{expected}', got '{artifact_url}'"
+        )
+
+    def test_sdk_error_raises_actionable_error(self) -> None:
+        """
+        Given the SDK raises on update_work_item
+        When link_work_items_to_pr is called
+        Then ActionableError is raised
+        """
+        # Given: a client whose WIT call raises
+        from ado_workflows.lifecycle import link_work_items_to_pr
+
+        client = Mock()
+        client.work_items.update_work_item.side_effect = Exception("TF401347: work item not found")
+
+        # When/Then: ActionableError is raised
+        with pytest.raises(ActionableError) as exc_info:
+            link_work_items_to_pr(
+                client,
+                pr_id=42,
+                project="Proj",
+                project_id="proj-guid",
+                repository_id="repo-guid",
+                work_item_ids=[999],
+            )
+
+        error_msg = str(exc_info.value)
+        assert "999" in error_msg, f"Expected work item ID in error message, got: {error_msg}"
+
+    def test_empty_list_is_noop(self) -> None:
+        """
+        Given an empty work_item_ids list
+        When link_work_items_to_pr is called
+        Then no SDK calls are made
+        """
+        # Given: a mock client
+        from ado_workflows.lifecycle import link_work_items_to_pr
+
+        client = Mock()
+
+        # When: called with an empty list
+        link_work_items_to_pr(
+            client,
+            pr_id=42,
+            project="Proj",
+            project_id="proj-guid",
+            repository_id="repo-guid",
+            work_item_ids=[],
+        )
+
+        # Then: no WIT calls were made
+        client.work_items.update_work_item.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestCreatePRWithWorkItems
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePRWithWorkItems:
+    """
+    REQUIREMENT: create_pull_request links work items after PR creation.
+
+    WHO: Agents and automation creating PRs.
+    WHAT: (1) When work_item_ids is provided, links are added after PR creation
+          (2) When work_item_ids is None, behavior is unchanged
+
+    MOCK BOUNDARY:
+        Mock:  client.git.create_pull_request (Git REST call),
+               client.work_items.update_work_item (WIT REST call)
+        Real:  branch normalization, CreatedPR mapping, argument threading
+               to link_work_items_to_pr
+        Never: AdoClient itself
+    """
+
+    def test_work_items_linked_after_creation(self) -> None:
+        """
+        Given work_item_ids=[123]
+        When create_pull_request is called
+        Then PR is created AND work item 123 is linked via artifact link
+        """
+        # Given: a mock client that returns a PR with repository metadata
+        client = Mock()
+        response = Mock()
+        response.pull_request_id = 42
+        response.url = "https://dev.azure.com/Org/Proj/_git/Repo/pullrequest/42"
+        response.title = "feat: add widget"
+        response.source_ref_name = "refs/heads/feature/widget"
+        response.target_ref_name = "refs/heads/main"
+        response.is_draft = False
+        response.repository = Mock()
+        response.repository.id = "repo-guid-1"
+        response.repository.project = Mock()
+        response.repository.project.id = "proj-guid-1"
+        client.git.create_pull_request.return_value = response
+        client.work_items.update_work_item.return_value = Mock()
+
+        # When: create_pull_request is called with work_item_ids
+        result = create_pull_request(
+            client,
+            "Repo",
+            "feature/widget",
+            "main",
+            "Proj",
+            title="feat: add widget",
+            work_item_ids=[123],
+        )
+
+        # Then: PR was created
+        assert result.pr_id == 42, f"Expected pr_id=42, got {result.pr_id}"
+        # Then: work item 123 was linked via WIT update
+        client.work_items.update_work_item.assert_called_once()
+        patch_doc = client.work_items.update_work_item.call_args[0][0]
+        assert patch_doc[0].value["rel"] == "ArtifactLink", (
+            f"Expected ArtifactLink relation, got {patch_doc[0].value['rel']!r}"
+        )
+        wi_id = client.work_items.update_work_item.call_args[0][1]
+        assert wi_id == 123, f"Expected work item 123, got {wi_id}"
+
+    def test_no_work_items_means_no_wit_calls(self) -> None:
+        """
+        Given work_item_ids is None
+        When create_pull_request is called
+        Then PR is created with no WIT calls
+        """
+        # Given: a mock client
+        client = _mock_client(pr_id=42)
+
+        # When: called without work_item_ids
+        result = create_pull_request(client, "Repo", "feature/x", "main", "Proj")
+
+        # Then: PR was created
+        assert result.pr_id == 42, f"Expected pr_id=42, got {result.pr_id}"
+        # Then: no WIT calls were made
+        client.work_items.update_work_item.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestUpdatePRWithWorkItems
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePRWithWorkItems:
+    """
+    REQUIREMENT: update_pull_request links work items after update.
+
+    WHO: Agents and automation updating PRs.
+    WHAT: (1) When work_item_ids is provided, links are added after PR update
+          (2) When work_item_ids is None, behavior is unchanged
+
+    MOCK BOUNDARY:
+        Mock:  client.git.update_pull_request (Git REST call),
+               client.work_items.update_work_item (WIT REST call)
+        Real:  PR model construction, PullRequestDetail mapping, argument
+               threading to link_work_items_to_pr
+        Never: AdoClient itself
+    """
+
+    def test_work_items_linked_after_update(self) -> None:
+        """
+        Given work_item_ids=[456]
+        When update_pull_request is called
+        Then PR is updated AND work item 456 is linked via artifact link
+        """
+        # Given: a mock client that returns a full PR detail on update
+        from ado_workflows.lifecycle import update_pull_request
+
+        client = Mock()
+        sdk_pr = _fake_sdk_pr(pr_id=42, title="Updated title")
+        sdk_pr.repository = Mock()
+        sdk_pr.repository.id = "repo-guid-2"
+        sdk_pr.repository.project = Mock()
+        sdk_pr.repository.project.id = "proj-guid-2"
+        client.git.update_pull_request.return_value = sdk_pr
+        client.work_items.update_work_item.return_value = Mock()
+
+        # When: update_pull_request is called with work_item_ids
+        result = update_pull_request(
+            client,
+            "Repo",
+            pr_id=42,
+            project="Proj",
+            title="Updated title",
+            work_item_ids=[456],
+        )
+
+        # Then: PR was updated
+        assert result.pr_id == 42, f"Expected pr_id=42, got {result.pr_id}"
+        assert result.title == "Updated title", (
+            f"Expected title='Updated title', got {result.title!r}"
+        )
+        # Then: work item 456 was linked via WIT update
+        client.work_items.update_work_item.assert_called_once()
+        wi_id = client.work_items.update_work_item.call_args[0][1]
+        assert wi_id == 456, f"Expected work item 456, got {wi_id}"
+
+    def test_no_work_items_means_no_wit_calls(self) -> None:
+        """
+        Given work_item_ids is None
+        When update_pull_request is called
+        Then PR is updated with no WIT calls
+        """
+        # Given: a mock client that returns a full PR detail
+        from ado_workflows.lifecycle import update_pull_request
+
+        client = Mock()
+        sdk_pr = _fake_sdk_pr(pr_id=42, title="New title")
+        client.git.update_pull_request.return_value = sdk_pr
+
+        # When: called without work_item_ids
+        result = update_pull_request(client, "Repo", pr_id=42, project="Proj", title="New title")
+
+        # Then: PR was updated
+        assert result.pr_id == 42, f"Expected pr_id=42, got {result.pr_id}"
+        # Then: no WIT calls were made
+        client.work_items.update_work_item.assert_not_called()

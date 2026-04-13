@@ -158,10 +158,15 @@ class GitCommitRef:
         **kwargs: Any,
     ) -> None: ...
 
+class TeamProjectReference:
+    id: str
+    name: str
+
 class GitRepository:
     name: str
     web_url: str
     id: str
+    project: TeamProjectReference
 
 class GitPullRequest:
     pull_request_id: int

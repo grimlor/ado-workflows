@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from actionable_errors import ActionableError
+from azure.devops.v7_1.work_item_tracking.models import JsonPatchOperation
 
 from ado_workflows.errors import classify_ado_error
 from ado_workflows.models import (
@@ -25,6 +26,8 @@ from ado_workflows.models import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ado_workflows.client import AdoClient
 
 # SDK model imports — runtime, not type-only.
@@ -101,6 +104,62 @@ def _map_pr_detail(response: GitPullRequest) -> PullRequestDetail:
     )
 
 
+def link_work_items_to_pr(
+    client: AdoClient,
+    *,
+    pr_id: int,
+    project: str,
+    project_id: str,
+    repository_id: str,
+    work_item_ids: Sequence[int],
+) -> None:
+    """
+    Link work items to a PR via ArtifactLink relations.
+
+    Each work item receives an ``ArtifactLink`` relation whose URL is a
+    ``vstfs:///Git/PullRequestId/...`` URI.  This uses the WIT REST API,
+    not the Git PR API, because PR ↔ work-item links are stored on the
+    work-item side.
+
+    Args:
+        client: An authenticated :class:`~client.AdoClient`.
+        pr_id: The pull request ID.
+        project: Azure DevOps project name or GUID.
+        project_id: The GUID of the project (from SDK response).
+        repository_id: The GUID of the repository (from SDK response).
+        work_item_ids: Work item IDs to link.
+
+    Raises:
+        ActionableError: When any individual link operation fails.
+
+    """
+    if not work_item_ids:
+        return
+
+    artifact_uri = f"vstfs:///Git/PullRequestId/{project_id}%2F{repository_id}%2F{pr_id}"
+
+    for wi_id in work_item_ids:
+        patch_doc = [
+            JsonPatchOperation(
+                op="add",
+                path="/relations/-",
+                value={
+                    "rel": "ArtifactLink",
+                    "url": artifact_uri,
+                    "attributes": {"name": "Pull Request"},
+                },
+            )
+        ]
+        try:
+            client.work_items.update_work_item(patch_doc, wi_id, project)
+        except Exception as exc:
+            raise classify_ado_error(
+                exc,
+                operation=f"link work item {wi_id} to PR {pr_id}",
+                context_hint=str(wi_id),
+            ) from exc
+
+
 def create_pull_request(
     client: AdoClient,
     repository: str,
@@ -111,6 +170,7 @@ def create_pull_request(
     title: str | None = None,
     description: str | None = None,
     is_draft: bool = False,
+    work_item_ids: Sequence[int] | None = None,
 ) -> CreatedPR:
     """
     Create a pull request via the Azure DevOps SDK.
@@ -126,6 +186,7 @@ def create_pull_request(
         title: Optional PR title.
         description: Optional PR description.
         is_draft: Whether to create as a draft PR.
+        work_item_ids: Optional list of work item IDs to link to the PR.
 
     Returns:
         A :class:`~models.CreatedPR` with the new PR's metadata.
@@ -149,7 +210,7 @@ def create_pull_request(
             exc, operation=f"create PR in '{repository}'", context_hint=repository
         ) from exc
 
-    return CreatedPR(
+    created = CreatedPR(
         pr_id=response.pull_request_id,
         url=response.url,
         title=response.title,
@@ -157,6 +218,18 @@ def create_pull_request(
         target_branch=response.target_ref_name,
         is_draft=response.is_draft,
     )
+
+    if work_item_ids:
+        link_work_items_to_pr(
+            client,
+            pr_id=response.pull_request_id,
+            project=project,
+            project_id=response.repository.project.id,
+            repository_id=response.repository.id,
+            work_item_ids=work_item_ids,
+        )
+
+    return created
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +274,7 @@ def update_pull_request(
     *,
     title: str | None = None,
     description: str | None = None,
+    work_item_ids: Sequence[int] | None = None,
 ) -> PullRequestDetail:
     """
     Update title and/or description of an existing PR.
@@ -209,12 +283,12 @@ def update_pull_request(
         ActionableError: When neither field is provided or the SDK call fails.
 
     """
-    if title is None and description is None:
+    if title is None and description is None and not work_item_ids:
         raise ActionableError.validation(
             service="AzureDevOps",
-            field_name="title/description",
-            reason="At least one of title or description must be provided.",
-            suggestion="Pass title=... and/or description=... to update.",
+            field_name="title/description/work_item_ids",
+            reason="At least one of title, description, or work_item_ids must be provided.",
+            suggestion="Pass title=..., description=..., and/or work_item_ids=[...] to update.",
         )
 
     pr_model = GitPullRequest(title=title, description=description)
@@ -226,7 +300,19 @@ def update_pull_request(
             exc, operation=f"update PR {pr_id}", context_hint=str(pr_id)
         ) from exc
 
-    return _map_pr_detail(response)
+    detail = _map_pr_detail(response)
+
+    if work_item_ids:
+        link_work_items_to_pr(
+            client,
+            pr_id=pr_id,
+            project=project,
+            project_id=response.repository.project.id,
+            repository_id=response.repository.id,
+            work_item_ids=work_item_ids,
+        )
+
+    return detail
 
 
 def retarget_pull_request(
