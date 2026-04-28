@@ -102,23 +102,13 @@ class AzureDevOpsPRContext:
         Create context from a numeric PR ID using RepositoryContext.
 
         Calls :meth:`RepositoryContext.get` to discover the org, project,
-        and repository, then constructs the PR URL.  Raises
-        :class:`ActionableError` if context resolution fails.
+        and repository, then constructs the PR URL.  Any
+        :class:`ActionableError` raised by ``RepositoryContext.get``
+        propagates unchanged -- the library's contract guarantees that
+        ``repo_info`` is a populated success dict by the time control
+        reaches the field reads below.
         """
         repo_info = RepositoryContext.get(working_directory=working_directory)
-
-        if not repo_info.get("success", True) or "name" not in repo_info:
-            error_msg = repo_info.get("error", "Unknown error")
-            suggestion = repo_info.get(
-                "suggestion",
-                "Call set_repository_context() to configure the repository.",
-            )
-            raise ActionableError.validation(
-                service=_SERVICE,
-                field_name="repository_context",
-                reason=f"{error_msg}. {suggestion}",
-                suggestion=suggestion,
-            )
 
         org = repo_info["organization"]
         project = repo_info["project"]

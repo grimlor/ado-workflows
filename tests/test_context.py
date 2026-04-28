@@ -17,6 +17,9 @@ from threading import Barrier, Thread
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+from actionable_errors import ActionableError
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -104,21 +107,23 @@ class TestContextSet:
 
     WHO: MCP tools that need a stable repository context for the session
     WHAT: (1) set() with a valid absolute directory discovers and caches the repo
-          (2) set() with a relative path returns a validation error
-          (3) set() with a non-existent path returns a not-found error
+          (2) set() with a relative path raises ActionableError (validation)
+          (3) set() with a non-existent path raises ActionableError (not_found)
           (4) set() clears previous cache before discovering anew
-          (5) set() resets state when discovery finds no ADO repos
+          (5) set() raises ActionableError when discovery finds no ADO repos,
+              and resets state so callers never operate on stale cache
           (6) when the workspace has multiple repos, the best match is cached
           (7) when infer cannot pick a best match, the first discovered repo
               is used as fallback
     WHY: Without validated context, downstream tools operate on stale or
-         incorrect repository information
+         incorrect repository information. Failures must be raised so
+         consumers do not silently index into error-shaped dicts.
 
     MOCK BOUNDARY:
         Mock:  git.Repo (GitPython — the only I/O boundary)
         Real:  RepositoryContext state machine, discover_repositories,
                infer_target_repository, parse_ado_url, os.path.isabs,
-               os.path.exists, tmp_path filesystem
+               os.path.exists, tmp_path filesystem, ActionableError
         Never: mock discover_repositories, infer_target_repository, or any
                of our own functions
     """
@@ -153,37 +158,42 @@ class TestContextSet:
             f"Expected project 'MyProject', got: {result['repository_info'].get('project')}"
         )
 
-    def test_set_with_relative_path_returns_validation_error(self) -> None:
+    def test_set_with_relative_path_raises_validation_error(self) -> None:
         """
-        Given a relative path
+        Given a relative path string
         When set() is called
-        Then a validation error is returned
+        Then ActionableError is raised with error_type='validation'
+            and the error message names the working_directory field
         """
         # Given/When: relative path (os.path.isabs naturally returns False)
-        result = RepositoryContext.set("relative/path")
+        with pytest.raises(ActionableError) as exc_info:
+            RepositoryContext.set("relative/path")
 
-        # Then: validation error
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert result["error_type"] == "validation", (
-            f"Expected validation error, got: {result.get('error_type')}"
+        # Then: validation error naming working_directory
+        err = exc_info.value
+        assert err.error_type == "validation", (
+            f"Expected error_type='validation', got: {err.error_type!r}"
+        )
+        assert "working_directory" in err.error, (
+            f"Expected error to name 'working_directory' field, got: {err.error!r}"
         )
 
-    def test_set_with_nonexistent_directory_returns_not_found(self, tmp_path: Path) -> None:
+    def test_set_with_nonexistent_directory_raises_not_found(self, tmp_path: Path) -> None:
         """
         Given an absolute path that does not exist
         When set() is called
-        Then a not-found error is returned
+        Then ActionableError is raised with error_type='not_found'
         """
         # Given: an absolute path that does not exist on disk
         missing = tmp_path / "nonexistent"
 
-        # When: set is called
-        result = RepositoryContext.set(str(missing))
+        # When/Then: set is called and raises
+        with pytest.raises(ActionableError) as exc_info:
+            RepositoryContext.set(str(missing))
 
         # Then: not-found error
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert result["error_type"] == "not_found", (
-            f"Expected not_found error, got: {result.get('error_type')}"
+        assert exc_info.value.error_type == "not_found", (
+            f"Expected error_type='not_found', got: {exc_info.value.error_type!r}"
         )
 
     def test_set_clears_previous_cache(self, tmp_path: Path) -> None:
@@ -212,17 +222,20 @@ class TestContextSet:
         """
         Given a directory with no git repos (or only non-ADO repos)
         When set() is called
-        Then the working directory is reset to None
+        Then ActionableError is raised and the working directory is reset
         """
         # Given: a real directory with no .git children
         empty_dir = tmp_path / "no-repos"
         empty_dir.mkdir()
 
-        # When: set is called — real discover_repositories finds nothing
-        result = RepositoryContext.set(str(empty_dir))
+        # When/Then: set is called — real discover_repositories finds nothing
+        with pytest.raises(ActionableError) as exc_info:
+            RepositoryContext.set(str(empty_dir))
 
-        # Then: error returned and state is clean
-        assert result["success"] is False, f"Expected failure, got: {result}"
+        # Then: not-found and state is clean (cache reset for next call)
+        assert exc_info.value.error_type == "not_found", (
+            f"Expected error_type='not_found', got: {exc_info.value.error_type!r}"
+        )
         status = RepositoryContext.status()
         assert status["context_set"] is False, (
             f"Expected context_set=False after failed discovery, got: {status}"
@@ -306,18 +319,22 @@ class TestContextGet:
               without updating the primary cache
           (3) get() without arguments and no cache returns an intelligent
               discovery result using the current working directory
-          (4) get() without context returns an error when discovery fails
+          (4) get() raises ActionableError when discovery cannot resolve a
+              repository (no cache + no working_directory + cwd has no
+              ADO repo, OR working_directory has no ADO repo)
           (5) get() with an override does not update the primary cache
           (6) get() uses os.getcwd() as the search root for intelligent discovery
     WHY: Caching avoids redundant git subprocess calls; explicit overrides
-         enable multi-repo workflows
+         enable multi-repo workflows. Failures must be raised so consumers
+         do not silently index into error-shaped dicts.
 
     MOCK BOUNDARY:
         Mock:  git.Repo (GitPython — the only I/O boundary),
                os.getcwd (process state I/O — only when testing cwd fallback)
         Real:  RepositoryContext caching logic, metadata enrichment,
                discover_repositories, infer_target_repository, parse_ado_url,
-               os.path.isabs, os.path.exists, tmp_path filesystem
+               os.path.isabs, os.path.exists, tmp_path filesystem,
+               ActionableError
         Never: mock discover_repositories, infer_target_repository, or any
                of our own functions
     """
@@ -400,27 +417,34 @@ class TestContextGet:
             f"Expected source=intelligent_discovery, got: {result.get('_context_source')}"
         )
 
-    def test_get_without_context_returns_error_when_discovery_fails(
+    def test_get_without_context_raises_when_discovery_fails(
         self,
         tmp_path: Path,
     ) -> None:
         """
         Given no context has been set and intelligent discovery finds no repos
         When get() is called
-        Then a validation error is returned with discovery failure detail
+        Then ActionableError is raised with discovery failure detail in the
+            error message
         """
         # Given: an empty directory with no .git — real discovery returns []
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
-        with patch("os.getcwd", return_value=str(empty_dir)):
-            # When: get without context — real discovery finds nothing
-            result = RepositoryContext.get()
+        with (
+            patch("os.getcwd", return_value=str(empty_dir)),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            # When/Then: get without context — real discovery finds nothing
+            RepositoryContext.get()
 
-        # Then: validation error with underlying cause
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert "No Azure DevOps repositories" in result.get("error", ""), (
-            f"Expected discovery failure detail in error, got: {result.get('error')}"
+        # Then: error_type is validation (caller can fix by supplying input)
+        err = exc_info.value
+        assert err.error_type == "validation", (
+            f"Expected error_type='validation', got: {err.error_type!r}"
+        )
+        assert "No Azure DevOps repositories" in err.error, (
+            f"Expected discovery failure detail in error message, got: {err.error!r}"
         )
 
     def test_get_override_does_not_update_cache(self, tmp_path: Path) -> None:
@@ -709,19 +733,24 @@ class TestContextThreadSafety:
 
 class TestContextErrorPaths:
     """
-    REQUIREMENT: RepositoryContext returns ActionableError dicts on failure.
+    REQUIREMENT: RepositoryContext raises ActionableError on discovery failure.
 
-    WHO: Callers that need structured error information
-    WHAT: (1) discovery exceptions are wrapped in ActionableError dicts
+    WHO: Callers that need structured error information; downstream code
+         that catches ActionableError to produce user-facing diagnostics
+    WHAT: (1) discovery exceptions are wrapped and raised as ActionableError
+              (error_type='internal') with the original message preserved
           (2) OSError from discovery is wrapped with the original message
-          (3) empty repository lists produce structured not-found errors
-    WHY: Unstructured exceptions break MCP tool response contracts
+              preserved
+          (3) empty repository lists raise ActionableError (error_type='not_found')
+    WHY: Unstructured exceptions break MCP tool response contracts; raising
+         ActionableError lets every consumer rely on a uniform failure shape
+         with actionable guidance.
 
     MOCK BOUNDARY:
         Mock:  git.Repo (GitPython — the only I/O boundary)
         Real:  RepositoryContext error wrapping logic, discover_repositories,
                infer_target_repository, parse_ado_url, os.path.isabs,
-               os.path.exists, tmp_path filesystem
+               os.path.exists, tmp_path filesystem, ActionableError
         Never: mock discover_repositories, infer_target_repository, or any
                of our own functions
     """
@@ -734,59 +763,263 @@ class TestContextErrorPaths:
         """
         Given git.Repo raises an unexpected RuntimeError
         When set() is called
-        Then the error is wrapped in an ActionableError dict
+        Then ActionableError is raised with error_type='internal' and the
+            original message preserved
         """
         # Given: a real directory with a .git marker, but Repo raises
         repo_dir = tmp_path / "broken-repo"
         (repo_dir / ".git").mkdir(parents=True)
 
-        with patch(_REPO_PATCH, side_effect=RuntimeError("git crashed")):
-            # When: set is called — real discover_repositories calls Repo()
-            result = RepositoryContext.set(str(repo_dir))
+        with (
+            patch(_REPO_PATCH, side_effect=RuntimeError("git crashed")),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            # When/Then: set is called — real discover_repositories calls Repo()
+            RepositoryContext.set(str(repo_dir))
 
-        # Then: structured error
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert "git crashed" in result.get("error", ""), (
-            f"Expected original error message, got: {result.get('error')}"
+        # Then: structured error wrapping the underlying exception
+        err = exc_info.value
+        assert err.error_type == "internal", (
+            f"Expected error_type='internal' for unexpected exception, got: {err.error_type!r}"
+        )
+        assert "git crashed" in err.error, (
+            f"Expected original error message in err.error, got: {err.error!r}"
         )
 
     def test_discovery_os_error_is_wrapped(self, tmp_path: Path) -> None:
         """
         Given git.Repo raises an OSError
         When set() is called
-        Then the error is wrapped with the original message preserved
+        Then ActionableError is raised with the original message preserved
         """
         # Given: a real directory with a .git marker, but Repo raises OSError
         repo_dir = tmp_path / "locked-repo"
         (repo_dir / ".git").mkdir(parents=True)
 
-        with patch(_REPO_PATCH, side_effect=OSError("permission denied")):
-            # When: set is called
-            result = RepositoryContext.set(str(repo_dir))
+        with (
+            patch(_REPO_PATCH, side_effect=OSError("permission denied")),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            # When/Then: set is called
+            RepositoryContext.set(str(repo_dir))
 
         # Then: error includes original message
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert "permission denied" in result.get("error", ""), (
-            f"Expected error detail, got: {result.get('error')}"
+        assert "permission denied" in exc_info.value.error, (
+            f"Expected error detail, got: {exc_info.value.error!r}"
         )
 
-    def test_no_repos_found_returns_structured_error(self, tmp_path: Path) -> None:
+    def test_no_repos_found_raises_not_found(self, tmp_path: Path) -> None:
         """
         Given a directory with no git repositories
         When set() is called
-        Then a not-found error is returned
+        Then ActionableError is raised with error_type='not_found'
         """
         # Given: a real empty directory — no .git children
         empty_dir = tmp_path / "empty-workspace"
         empty_dir.mkdir()
 
-        # When: set is called — real discover_repositories returns []
-        result = RepositoryContext.set(str(empty_dir))
+        # When/Then: set is called — real discover_repositories returns []
+        with pytest.raises(ActionableError) as exc_info:
+            RepositoryContext.set(str(empty_dir))
 
         # Then: structured not-found error
-        assert result["success"] is False, f"Expected failure, got: {result}"
-        assert result["error_type"] == "not_found", (
-            f"Expected not_found error, got: {result.get('error_type')}"
+        assert exc_info.value.error_type == "not_found", (
+            f"Expected error_type='not_found', got: {exc_info.value.error_type!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestDiscoveryFailureGuidance
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoveryFailureGuidance:
+    """
+    REQUIREMENT: ActionableError raised by get()/set() on discovery failure
+    carries ai_guidance that names the agent-executable remedies and the
+    inputs the agent can validate before retrying.
+
+    WHO: AI agents consuming RepositoryContext via the MCP layer. The
+         original buggy guidance ("verify branches and az login") sent
+         agents into retry loops with the wrong remedy. This test pins
+         the new contract so future regressions break loudly.
+    WHAT: (1) ai_guidance is non-None on every discovery failure
+          (2) action_required names BOTH agent-executable remedies:
+              the working_directory parameter AND set_repository_context
+          (3) at least one of checks/steps is non-empty (an agent must
+              have something to validate or sequence before retrying)
+          (4) guidance does NOT instruct the agent to run interactive
+              human-only commands like 'az login' (these must be phrased
+              as 'ask the user to ...' if needed; absence is fine here
+              because authentication is not the cause of context-discovery
+              failures).
+    WHY: ai_guidance is a structured cue for the next automated step.
+         Wrong guidance is worse than no guidance \u2014 it leads agents
+         to take incorrect corrective actions and never converge on
+         the real fix.
+
+    MOCK BOUNDARY:
+        Mock:  git.Repo (GitPython \u2014 the only I/O boundary),
+               os.getcwd (process state I/O \u2014 only when testing cwd fallback)
+        Real:  RepositoryContext, discover_repositories,
+               infer_target_repository, parse_ado_url, ActionableError,
+               AIGuidance, tmp_path filesystem
+        Never: mock any function in ado_workflows.*; never construct
+               an ActionableError directly in test code (assertions are
+               on what RepositoryContext raises)
+    """
+
+    def setup_method(self) -> None:
+        """Reset global state via the public API."""
+        RepositoryContext.clear()
+
+    def test_get_failure_carries_ai_guidance(self, tmp_path: Path) -> None:
+        """
+        Given no cache and cwd has no ADO repository
+        When get() is called
+        Then the raised ActionableError has a non-None ai_guidance
+        """
+        # Given: an empty directory as cwd
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        with (
+            patch("os.getcwd", return_value=str(empty_dir)),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            # When/Then: get() raises with guidance
+            RepositoryContext.get()
+
+        # Then: ai_guidance is present
+        assert exc_info.value.ai_guidance is not None, (
+            f"Expected ai_guidance to be present on context-discovery failure, "
+            f"got None. Error: {exc_info.value.error!r}"
+        )
+
+    def test_get_failure_action_required_names_both_remedies(self, tmp_path: Path) -> None:
+        """
+        Given a discovery failure from get()
+        When the raised ActionableError is inspected
+        Then ai_guidance.action_required mentions both 'working_directory'
+            and 'set_repository_context' (the two agent-executable remedies)
+        """
+        # Given: an empty directory as cwd
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        # When: get() raises
+        with (
+            patch("os.getcwd", return_value=str(empty_dir)),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            RepositoryContext.get()
+
+        # Then: both remedies named in action_required
+        guidance = exc_info.value.ai_guidance
+        assert guidance is not None, "ai_guidance must be present"
+        action = guidance.action_required
+        assert "working_directory" in action, (
+            f"Expected action_required to name 'working_directory' remedy, got: {action!r}"
+        )
+        assert "set_repository_context" in action, (
+            f"Expected action_required to name 'set_repository_context' remedy, got: {action!r}"
+        )
+
+    def test_get_failure_provides_actionable_checks_or_steps(self, tmp_path: Path) -> None:
+        """
+        Given a discovery failure from get()
+        When the raised ActionableError is inspected
+        Then at least one of ai_guidance.checks / ai_guidance.steps is
+            non-empty so the agent has something to validate or sequence
+            before retrying
+        """
+        # Given: an empty directory as cwd
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        # When: get() raises
+        with (
+            patch("os.getcwd", return_value=str(empty_dir)),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            RepositoryContext.get()
+
+        # Then: checks or steps populated
+        guidance = exc_info.value.ai_guidance
+        assert guidance is not None, "ai_guidance must be present"
+        checks = guidance.checks or []
+        steps = guidance.steps or []
+        assert checks or steps, (
+            f"Expected at least one of checks/steps to be non-empty so "
+            f"the agent has actionable next steps. Got checks={checks!r}, "
+            f"steps={steps!r}"
+        )
+
+    def test_get_failure_does_not_instruct_agent_to_run_interactive_commands(
+        self, tmp_path: Path
+    ) -> None:
+        """
+        Given a discovery failure from get()
+        When the raised ActionableError is inspected
+        Then guidance does NOT directly instruct the agent to run human-only
+            interactive commands (the original bug surfaced 'az login' as a
+            direct instruction, which agents cannot complete; authentication
+            is not the cause of context-discovery failures)
+        """
+        # Given: an empty directory as cwd
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        # When: get() raises
+        with (
+            patch("os.getcwd", return_value=str(empty_dir)),
+            pytest.raises(ActionableError) as exc_info,
+        ):
+            RepositoryContext.get()
+
+        # Then: no direct 'az login' instruction
+        guidance = exc_info.value.ai_guidance
+        assert guidance is not None, "ai_guidance must be present"
+
+        # Concatenate the entire guidance surface
+        all_text_parts: list[str] = [guidance.action_required]
+        all_text_parts.extend(guidance.checks or [])
+        all_text_parts.extend(guidance.steps or [])
+        all_text = " ".join(all_text_parts).lower()
+
+        # The original bug wrote 'az login' as a direct directive. If 'az login'
+        # appears at all, it must be qualified by 'ask the user' to phrase it
+        # as a human handoff. Bare 'az login' is forbidden.
+        if "az login" in all_text:
+            assert "ask the user" in all_text, (
+                f"If guidance mentions 'az login' it must be phrased as "
+                f"'ask the user' (human handoff), not as a direct agent "
+                f"instruction. Got: {all_text!r}"
+            )
+
+    def test_set_with_no_ado_repos_carries_ai_guidance(self, tmp_path: Path) -> None:
+        """
+        Given an existing directory containing no ADO repositories
+        When set() is called and raises
+        Then the raised ActionableError carries non-None ai_guidance with
+            a non-empty action_required
+        """
+        # Given: a real directory with no .git children
+        empty_dir = tmp_path / "no-repos"
+        empty_dir.mkdir()
+
+        # When/Then: set() raises with guidance
+        with pytest.raises(ActionableError) as exc_info:
+            RepositoryContext.set(str(empty_dir))
+
+        # Then: guidance is present and substantive
+        guidance = exc_info.value.ai_guidance
+        assert guidance is not None, (
+            f"Expected ai_guidance on set() not_found failure, got None. "
+            f"Error: {exc_info.value.error!r}"
+        )
+        assert guidance.action_required, (
+            f"Expected non-empty action_required, got: {guidance.action_required!r}"
         )
 
 

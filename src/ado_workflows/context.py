@@ -9,10 +9,16 @@ Typical usage::
 
     from ado_workflows.context import RepositoryContext
 
-    result = RepositoryContext.set("/workspace/my-repo")
-    info   = RepositoryContext.get()          # cached
-    status = RepositoryContext.status()       # debug info
-    RepositoryContext.clear()                 # reset
+    result = RepositoryContext.set("/workspace/my-repo")  # raises on failure
+    info   = RepositoryContext.get()                      # cached; raises on failure
+    status = RepositoryContext.status()                   # debug info
+    RepositoryContext.clear()                             # reset
+
+Failure contract: :meth:`RepositoryContext.set` and
+:meth:`RepositoryContext.get` raise :class:`ActionableError` on failure.
+They never return error-shaped dicts. See ``ai_guidance`` for the two
+agent-executable remedies (``working_directory`` parameter and
+``set_repository_context`` function).
 """
 
 from __future__ import annotations
@@ -22,11 +28,108 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
-from actionable_errors import ActionableError, from_exception
+from actionable_errors import ActionableError, AIGuidance
 
 from ado_workflows.discovery import discover_repositories, infer_target_repository
 
 _SERVICE = "Azure DevOps"
+
+
+def _no_session_context_guidance() -> AIGuidance:
+    """
+    AIGuidance for ``get()`` when no session context is set and intelligent discovery from cwd finds no Azure DevOps repository.
+
+    This is the only site where both agent-executable remedies apply: the
+    caller has neither a per-call override nor a session-cached context,
+    so either remedy resolves the failure.
+    """
+    return AIGuidance(
+        action_required=(
+            "Pass `working_directory` (absolute path to an Azure DevOps "
+            "repository) when calling this function, or call "
+            "`set_repository_context(working_directory=...)` once at the "
+            "start of the session so subsequent calls inherit the context."
+        ),
+        checks=[
+            "Is the path you intend to use an absolute path containing a `.git/` folder?",
+            "Does that repository's `origin` remote URL point to Azure "
+            "DevOps (`dev.azure.com` or `*.visualstudio.com`)?",
+            "Has `set_repository_context` been called in this session?",
+        ],
+        steps=[
+            "Try the per-call override first: pass `working_directory` "
+            "(absolute path) on the next call -- cheapest to retry.",
+            "If multiple calls will use the same repository, call "
+            "`set_repository_context(working_directory=...)` once so the "
+            "context is cached for the rest of the session.",
+        ],
+    )
+
+
+def _invalid_path_guidance() -> AIGuidance:
+    """
+    AIGuidance for path-shape failures (non-absolute path, missing directory).
+
+    The remedy is to fix the input the caller already passed.
+    """
+    return AIGuidance(
+        action_required=(
+            "Resolve the path to an absolute path that exists on disk "
+            "(e.g. `os.path.abspath(...)` after verifying the directory "
+            "is present), then retry with the corrected `working_directory`."
+        ),
+        checks=[
+            "Is the path absolute? Relative paths are rejected.",
+            "Does the directory exist on disk? Check for typos and that "
+            "it has not been moved or deleted.",
+        ],
+    )
+
+
+def _no_ado_repo_guidance() -> AIGuidance:
+    """
+    AIGuidance for the case where the target directory exists but contains no Azure DevOps repository.
+
+    The remedy is to point at a different directory whose `origin` remote is on Azure DevOps.
+    """
+    return AIGuidance(
+        action_required=(
+            "Retry with a `working_directory` that contains an Azure "
+            "DevOps repository -- a directory with a `.git/` folder whose "
+            "`origin` remote URL is on `dev.azure.com` or "
+            "`*.visualstudio.com`."
+        ),
+        checks=[
+            "Does the directory contain a `.git/` folder?",
+            "Does `git -C <path> remote get-url origin` point to "
+            "`dev.azure.com` or `*.visualstudio.com`? If it points to "
+            "GitHub or another host, this is not the right repository.",
+            "If you intended a parent workspace, point at the specific "
+            "repository sub-directory rather than the workspace root.",
+        ],
+    )
+
+
+def _discovery_internal_guidance() -> AIGuidance:
+    """
+    AIGuidance for unexpected GitPython failures during discovery.
+
+    The remedy is to inspect the repository state -- the agent cannot
+    auto-recover from a corrupted `.git` or invalid remote configuration.
+    """
+    return AIGuidance(
+        action_required=(
+            "GitPython failed unexpectedly while inspecting the "
+            "repository. Read the wrapped exception for the cause; if "
+            "the repository state is corrupted or its remote "
+            "configuration is invalid, ask the user to repair it before "
+            "retrying."
+        ),
+        checks=[
+            "Does `git -C <path> status` succeed when run by the user?",
+            "Does `git -C <path> remote get-url origin` return a valid URL?",
+        ],
+    )
 
 
 class RepositoryContext:
@@ -60,28 +163,40 @@ class RepositoryContext:
 
         Validates the path, runs discovery, and caches the result.  On
         failure the previous context is cleared so callers never operate
-        against stale data.
+        against stale data, and an :class:`ActionableError` is raised.
+
+        Raises:
+            ActionableError: ``error_type='validation'`` for a non-absolute
+                path; ``error_type='not_found'`` for a missing directory
+                or a directory containing no Azure DevOps repository;
+                ``error_type='internal'`` for unexpected GitPython errors.
+                ``ai_guidance`` names both agent-executable remedies
+                (``working_directory`` parameter and
+                ``set_repository_context`` function).
+
         """
         with cls._lock:
             # Validate: must be absolute
             if not os.path.isabs(working_directory):
-                return ActionableError.validation(
+                raise ActionableError.validation(
                     service=_SERVICE,
                     field_name="working_directory",
                     reason=f"Must be an absolute path, got: {working_directory}",
                     suggestion="Provide the full absolute path to the repository.",
-                ).to_dict()
+                    ai_guidance=_invalid_path_guidance(),
+                )
 
             # Validate: must exist
             if not os.path.exists(working_directory):
-                return ActionableError.not_found(
+                raise ActionableError.not_found(
                     service="File System",
                     resource_type="Directory",
                     resource_id=working_directory,
                     raw_error="Directory does not exist",
-                ).to_dict()
+                    ai_guidance=_invalid_path_guidance(),
+                )
 
-            # Clear previous cache
+            # Clear previous cache before running discovery
             cls._working_directory = working_directory
             cls._cached_info = None
             cls._cache_timestamp = None
@@ -91,22 +206,24 @@ class RepositoryContext:
                 repo_info = cls._discover(working_directory)
             except Exception as exc:
                 cls._working_directory = None
-                return from_exception(
-                    exc,
+                raise ActionableError.internal(
                     service=_SERVICE,
                     operation="repository_discovery",
+                    raw_error=str(exc),
                     suggestion="Verify git repository and remote configuration.",
-                ).to_dict()
+                    ai_guidance=_discovery_internal_guidance(),
+                ) from exc
 
-            if not repo_info.get("success", True):
-                # Discovery returned an error dict
+            if repo_info is None:
+                # Discovery found no Azure DevOps repository
                 cls._working_directory = None
-                return ActionableError.not_found(
+                raise ActionableError.not_found(
                     service=_SERVICE,
                     resource_type="Repository",
                     resource_id=working_directory,
-                    raw_error=repo_info.get("error", "Unknown discovery error"),
-                ).to_dict()
+                    raw_error=(f"No Azure DevOps repositories found under {working_directory}"),
+                    ai_guidance=_no_ado_repo_guidance(),
+                )
 
             cls._cached_info = repo_info
             cls._cache_timestamp = datetime.now(tz=UTC).isoformat()
@@ -126,24 +243,34 @@ class RepositoryContext:
         * No args + cache → return cached (source ``"cached"``)
         * No args + no cache → attempt intelligent discovery (source ``"intelligent_discovery"``)
         * Explicit *working_directory* → fresh discovery, **does not** update the primary cache
+
+        Raises:
+            ActionableError: ``error_type='validation'`` when no context is
+                set and intelligent discovery (cwd) finds no Azure DevOps
+                repository; ``error_type='not_found'`` when an explicit
+                ``working_directory`` is provided but no Azure DevOps
+                repository is discovered there. ``ai_guidance`` names both
+                agent-executable remedies.
+
         """
         with cls._lock:
             target = working_directory or cls._working_directory
 
-            # No context + no override → intelligent discovery
+            # No context + no override → intelligent discovery from cwd
             if target is None:
                 repo_info = cls._discover(None)
-                if repo_info.get("success", True) and "name" in repo_info:
+                if repo_info is not None:
                     return cls._add_metadata(repo_info, "intelligent_discovery")
-                underlying = repo_info.get("error", "Unknown error")
-                return ActionableError.validation(
+                raise ActionableError.validation(
                     service=_SERVICE,
                     field_name="repository_context",
                     reason=(
-                        f"No repository context set and intelligent discovery failed: {underlying}"
+                        f"No Azure DevOps repositories found under {os.getcwd()} "
+                        f"and no repository context has been set."
                     ),
-                    suggestion="Call set_repository_context() first.",
-                ).to_dict()
+                    suggestion=("Pass working_directory or call set_repository_context() first."),
+                    ai_guidance=_no_session_context_guidance(),
+                )
 
             # Cached + no override → return cached
             if working_directory is None and cls._cached_info is not None:
@@ -151,6 +278,14 @@ class RepositoryContext:
 
             # Override or cache miss → fresh discovery
             repo_info = cls._discover(target)
+            if repo_info is None:
+                raise ActionableError.not_found(
+                    service=_SERVICE,
+                    resource_type="Repository",
+                    resource_id=target,
+                    raw_error=f"No Azure DevOps repositories found under {target}",
+                    ai_guidance=_no_ado_repo_guidance(),
+                )
 
             return cls._add_metadata(repo_info, "fresh_discovery")
 
@@ -193,23 +328,25 @@ class RepositoryContext:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _discover(cls, working_directory: str | None) -> dict[str, Any]:
+    def _discover(cls, working_directory: str | None) -> dict[str, Any] | None:
         """
         Run git discovery via Layer 1 primitives.
 
         Uses :func:`discover_repositories` + :func:`infer_target_repository`
-        to find and select a repository.  If *working_directory* is ``None``,
-        falls back to :data:`os.getcwd()`.
+        to find and select an Azure DevOps repository.  If
+        *working_directory* is ``None``, falls back to :data:`os.getcwd()`.
+
+        Returns:
+            The selected repository info dict, or ``None`` when no Azure
+            DevOps repositories are discovered. Callers translate ``None``
+            into the appropriate :class:`ActionableError`.
+
         """
         search_root = working_directory or os.getcwd()
         repos = discover_repositories(search_root)
 
         if not repos:
-            return {
-                "success": False,
-                "error": f"No Azure DevOps repositories found under {search_root}",
-                "error_type": "not_found",
-            }
+            return None
 
         best = infer_target_repository(repos, working_directory=working_directory)
         if best is None:
