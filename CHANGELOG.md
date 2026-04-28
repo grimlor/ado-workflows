@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v0.12.0 (2026-04-28)
+
+### Chores
+
+- Update version to 0.11.0 in uv.lock
+  ([`8969ed0`](https://github.com/grimlor/ado-workflows/commit/8969ed073db2ca883f3b2db10a348543be592d28))
+
+### Features
+
+- **context**: Raise ActionableError on RepositoryContext discovery failure
+  ([`242b442`](https://github.com/grimlor/ado-workflows/commit/242b4420a0058a377a57e1747ff16f2fbce3344f))
+
+### Breaking Changes
+
+- **context**: RepositoryContext.set() and RepositoryContext.get(), plus the module-level
+  convenience functions set_repository_context() and get_repository_context(), now raise
+  ActionableError on failure instead of returning {"success": False, "error": ..., ...}. Migration:
+
+
 ## v0.11.0 (2026-04-13)
 
 ### Chores
