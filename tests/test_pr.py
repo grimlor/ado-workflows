@@ -174,8 +174,9 @@ class TestRepositoryContextResolution:
           (2) no cached context raises ActionableError suggesting
               set_repository_context()
           (3) an explicit working_directory is forwarded to RepositoryContext
-          (4) an error dict from context raises ActionableError with the
-              underlying message
+          (4) ActionableError raised by RepositoryContext.get propagates
+              unchanged (no wrapping, no rewrapping into a second error)
+              with the underlying message preserved
     WHY: Users often reference PRs by ID alone. Without context resolution, the
          tool can't know which org/project/repo the ID belongs to.
 
@@ -235,11 +236,17 @@ class TestRepositoryContextResolution:
             f"Expected source 'repository_context', got '{ctx.source}'"
         )
 
-    def test_no_context_raises_actionable_error_suggesting_set(self, tmp_path: Path) -> None:
+    def test_no_context_raises_actionable_error_with_actionable_guidance(
+        self, tmp_path: Path
+    ) -> None:
         """
-        Given RepositoryContext has no cached context and discovery finds nothing
-        When from_pr_id(42) is called with an empty directory
-        Then raises ActionableError suggesting set_repository_context()
+        Given an explicit working_directory that exists but contains no ADO repo
+        When from_pr_id(42, empty_dir) is called
+        Then raises ActionableError whose ai_guidance directs the agent to
+            retry with a working_directory pointing at an Azure DevOps
+            repository (the correct remedy for an explicit-dir failure --
+            calling set_repository_context would not help, since the caller
+            already supplied a path)
         """
         # Given: no cached context, directory exists but has no git repos
         empty_dir = tmp_path / "no_repos"
@@ -249,10 +256,16 @@ class TestRepositoryContextResolution:
         with pytest.raises(ActionableError) as exc_info:
             AzureDevOpsPRContext.from_pr_id(42, str(empty_dir))
 
-        # Then: error suggests the remedy
-        error_message = str(exc_info.value)
-        assert "set_repository_context" in error_message, (
-            f"Error should suggest set_repository_context(). Got: {error_message}"
+        # Then: guidance names the actionable remedy for this scenario
+        guidance = exc_info.value.ai_guidance
+        assert guidance is not None, (
+            f"Expected ai_guidance on context-resolution failure, got None. "
+            f"Error: {exc_info.value.error!r}"
+        )
+        assert "working_directory" in guidance.action_required, (
+            f"Expected ai_guidance.action_required to direct the agent to "
+            f"retry with a corrected working_directory, got: "
+            f"{guidance.action_required!r}"
         )
 
     def test_working_directory_is_passed_through_to_repository_context(
@@ -292,24 +305,25 @@ class TestRepositoryContextResolution:
             f"got '{ctx.organization}' — working_directory may not have been forwarded"
         )
 
-    def test_error_dict_from_context_raises_actionable_error(self, tmp_path: Path) -> None:
+    def test_actionable_error_from_context_propagates(self, tmp_path: Path) -> None:
         """
         Given discovery finds no repositories at the specified directory
         When from_pr_id(42, empty_dir) is called
-        Then raises ActionableError with the underlying error message
+        Then the ActionableError raised by RepositoryContext.get propagates
+            unchanged with the underlying message preserved
         """
         # Given: a real directory with no git repos
         empty_dir = tmp_path / "no_repos"
         empty_dir.mkdir()
 
-        # When / Then: from_pr_id() raises when discovery finds nothing
+        # When / Then: from_pr_id() does not catch the library error — it
+        # propagates unchanged from RepositoryContext.get
         with pytest.raises(ActionableError) as exc_info:
             AzureDevOpsPRContext.from_pr_id(42, str(empty_dir))
 
-        # Then: the underlying discovery error propagates
-        error_message = str(exc_info.value)
-        assert "No Azure DevOps repositories found" in error_message, (
-            f"Error should contain underlying message. Got: {error_message}"
+        # Then: the underlying discovery message is preserved (no wrapping)
+        assert "No Azure DevOps repositories found" in exc_info.value.error, (
+            f"Expected underlying discovery message in err.error, got: {exc_info.value.error!r}"
         )
 
 
