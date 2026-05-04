@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.13.0 (2026-05-04)
+
+### Features
+
+- Plural-aware multi-org context resolution
+  ([`65289e1`](https://github.com/grimlor/ado-workflows/commit/65289e124b15a53fbd5a63dba06e6c5a6aa20616))
+
+
 ## v0.12.0 (2026-04-28)
 
 ### Chores
