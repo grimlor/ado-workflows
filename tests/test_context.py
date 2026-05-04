@@ -268,14 +268,15 @@ class TestContextSet:
             f"Expected repo-a as best match, got: {result['repository_info'].get('name')}"
         )
 
-    def test_set_with_ambiguous_workspace_falls_back_to_first_repo(
+    def test_set_with_ambiguous_workspace_raises_actionable_error(
         self,
         tmp_path: Path,
     ) -> None:
         """
         Given a workspace with multiple ADO repos and neither matches cwd
         When set() is called with the workspace root
-        Then the first discovered repo is used as fallback
+        Then ActionableError.validation is raised; the cache is cleared;
+            the error carries the candidate list in error.context
         """
         # Given: a workspace with two repos, cwd outside both
         workspace = tmp_path / "workspace"
@@ -289,18 +290,29 @@ class TestContextSet:
             return _mock_repo(url_b)
 
         # When: set from the workspace root (not inside either repo)
-        # cwd is /tmp/... which won't match either repo path
         with (
             patch(_REPO_PATCH, side_effect=repo_factory),
             patch("os.getcwd", return_value="/unrelated"),
+            pytest.raises(ActionableError) as exc_info,
         ):
-            result = RepositoryContext.set(str(workspace))
+            RepositoryContext.set(str(workspace))
 
-        # Then: first discovered repo used as fallback
-        assert result["success"] is True, f"Expected success, got: {result}"
-        assert result["repository_info"]["name"] in ("repo-a", "repo-b"), (
-            f"Expected one of the discovered repos as fallback, "
-            f"got: {result['repository_info'].get('name')}"
+        # Then: validation error with candidate metadata in error.context
+        err = exc_info.value
+        assert err.error_type == "validation", (
+            f"Expected error_type='validation' on ambiguity, got {err.error_type!r}"
+        )
+        assert err.context is not None, (
+            "Expected err.context to carry candidate metadata, got None"
+        )
+        candidates = err.context.get("candidate_repositories")
+        assert candidates is not None and len(candidates) == 2, (
+            f"Expected 2 candidate repositories, got {candidates!r}"
+        )
+        # And: the cache is cleared (not poisoned by the failed set)
+        status = RepositoryContext.status()
+        assert status["context_set"] is False, (
+            f"Expected context_set=False after failed set, got {status!r}"
         )
 
 

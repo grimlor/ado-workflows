@@ -24,6 +24,7 @@ agent-executable remedies (``working_directory`` parameter and
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
@@ -33,6 +34,80 @@ from actionable_errors import ActionableError, AIGuidance
 from ado_workflows.discovery import discover_repositories, infer_target_repository
 
 _SERVICE = "Azure DevOps"
+
+
+@dataclass(frozen=True)
+class _NoMatch:
+    """Discovery found zero Azure DevOps repositories."""
+
+
+@dataclass(frozen=True)
+class _SingleMatch:
+    """Discovery resolved to exactly one Azure DevOps repository."""
+
+    repo: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _AmbiguousMatch:
+    """
+    Discovery found more than one Azure DevOps repository.
+
+    Returned when no ``working_directory`` hint was sufficient to pick
+    one of the discovered candidates.
+    """
+
+    candidates: list[dict[str, Any]]
+
+
+_Resolution = _NoMatch | _SingleMatch | _AmbiguousMatch
+
+
+def _candidate_summary(repo: dict[str, Any]) -> dict[str, Any]:
+    """Extract the user-facing identification fields from a discovered repo dict."""
+    return {
+        "name": repo["name"],
+        "organization": repo["organization"],
+        "project": repo["project"],
+        "path": repo["path"],
+    }
+
+
+def _ambiguous_repos_guidance() -> AIGuidance:
+    """
+    AIGuidance for the multi-repo ambiguity branch.
+
+    Direct the agent to surface the ``candidate_repositories`` list in
+    ``error.context`` as a sub-prompt and ask the user which repository
+    to target. Explicitly call out that the work board may live in a
+    different organization from any of the code repos.
+    """
+    return AIGuidance(
+        action_required=(
+            "Multiple Azure DevOps repositories were discovered. Surface "
+            "the `candidate_repositories` list in `error.context` to the "
+            "user as a sub-prompt and ask them to pick one, then retry "
+            "with `working_directory` set to the chosen repo's path. If "
+            "the operation targets a work item, prefer asking the user "
+            "for the full work item URL — work boards may live in a "
+            "different organization from any of the code repos."
+        ),
+        checks=[
+            "Has the user already indicated which repository they want?",
+            "Is the operation a work item lookup? If so, the work board "
+            "may live in a different org — a URL is more reliable than "
+            "any code repo's `working_directory`.",
+            "Are all candidates Azure DevOps repos, or does one belong "
+            "to a different VCS host (GitHub, GitLab, etc.)?",
+        ],
+        steps=[
+            "Render the candidate list (`error.context['candidate_repositories']`) "
+            "as a numbered choice prompt for the user.",
+            "Wait for the user's selection — do not pick one programmatically.",
+            "Retry the call with `working_directory` set to the selected "
+            "repo's `path`, or with the work item URL the user supplies.",
+        ],
+    )
 
 
 def _no_session_context_guidance() -> AIGuidance:
@@ -203,7 +278,7 @@ class RepositoryContext:
 
             # Discover
             try:
-                repo_info = cls._discover(working_directory)
+                resolution = cls._discover(working_directory)
             except Exception as exc:
                 cls._working_directory = None
                 raise ActionableError.internal(
@@ -214,8 +289,7 @@ class RepositoryContext:
                     ai_guidance=_discovery_internal_guidance(),
                 ) from exc
 
-            if repo_info is None:
-                # Discovery found no Azure DevOps repository
+            if isinstance(resolution, _NoMatch):
                 cls._working_directory = None
                 raise ActionableError.not_found(
                     service=_SERVICE,
@@ -225,6 +299,31 @@ class RepositoryContext:
                     ai_guidance=_no_ado_repo_guidance(),
                 )
 
+            if isinstance(resolution, _AmbiguousMatch):
+                cls._working_directory = None
+                err = ActionableError.validation(
+                    service=_SERVICE,
+                    field_name="working_directory",
+                    reason=(
+                        f"Multiple Azure DevOps repositories found under "
+                        f"{working_directory}. Refusing to pick one silently."
+                    ),
+                    suggestion=(
+                        "Pass working_directory pointing at the specific "
+                        "repository sub-directory, or a full URL of the "
+                        "target resource."
+                    ),
+                    ai_guidance=_ambiguous_repos_guidance(),
+                )
+                err.context = {
+                    "candidate_repositories": [
+                        _candidate_summary(c) for c in resolution.candidates
+                    ]
+                }
+                raise err
+
+            # _SingleMatch — narrowed by elimination
+            repo_info = resolution.repo
             cls._cached_info = repo_info
             cls._cache_timestamp = datetime.now(tz=UTC).isoformat()
 
@@ -258,9 +357,31 @@ class RepositoryContext:
 
             # No context + no override → intelligent discovery from cwd
             if target is None:
-                repo_info = cls._discover(None)
-                if repo_info is not None:
-                    return cls._add_metadata(repo_info, "intelligent_discovery")
+                resolution = cls._discover(None)
+                if isinstance(resolution, _SingleMatch):
+                    return cls._add_metadata(resolution.repo, "intelligent_discovery")
+                if isinstance(resolution, _AmbiguousMatch):
+                    err = ActionableError.validation(
+                        service=_SERVICE,
+                        field_name="repository_context",
+                        reason=(
+                            f"Multiple Azure DevOps repositories found under "
+                            f"{os.getcwd()}. Refusing to pick one silently."
+                        ),
+                        suggestion=(
+                            "Pass working_directory pointing at the specific "
+                            "repository sub-directory, or a full URL of the "
+                            "target resource."
+                        ),
+                        ai_guidance=_ambiguous_repos_guidance(),
+                    )
+                    err.context = {
+                        "candidate_repositories": [
+                            _candidate_summary(c) for c in resolution.candidates
+                        ]
+                    }
+                    raise err
+                # _NoMatch
                 raise ActionableError.validation(
                     service=_SERVICE,
                     field_name="repository_context",
@@ -277,17 +398,38 @@ class RepositoryContext:
                 return cls._add_metadata(cls._cached_info, "cached")
 
             # Override or cache miss → fresh discovery
-            repo_info = cls._discover(target)
-            if repo_info is None:
-                raise ActionableError.not_found(
+            resolution = cls._discover(target)
+            if isinstance(resolution, _SingleMatch):
+                return cls._add_metadata(resolution.repo, "fresh_discovery")
+            if isinstance(resolution, _AmbiguousMatch):
+                err = ActionableError.validation(
                     service=_SERVICE,
-                    resource_type="Repository",
-                    resource_id=target,
-                    raw_error=f"No Azure DevOps repositories found under {target}",
-                    ai_guidance=_no_ado_repo_guidance(),
+                    field_name="working_directory",
+                    reason=(
+                        f"Multiple Azure DevOps repositories found under "
+                        f"{target}. Refusing to pick one silently."
+                    ),
+                    suggestion=(
+                        "Pass working_directory pointing at the specific "
+                        "repository sub-directory, or a full URL of the "
+                        "target resource."
+                    ),
+                    ai_guidance=_ambiguous_repos_guidance(),
                 )
-
-            return cls._add_metadata(repo_info, "fresh_discovery")
+                err.context = {
+                    "candidate_repositories": [
+                        _candidate_summary(c) for c in resolution.candidates
+                    ]
+                }
+                raise err
+            # _NoMatch
+            raise ActionableError.not_found(
+                service=_SERVICE,
+                resource_type="Repository",
+                resource_id=target,
+                raw_error=f"No Azure DevOps repositories found under {target}",
+                ai_guidance=_no_ado_repo_guidance(),
+            )
 
     @classmethod
     def clear(cls) -> dict[str, Any]:
@@ -312,47 +454,78 @@ class RepositoryContext:
     def status(cls) -> dict[str, Any]:
         """Snapshot of current context state for debugging."""
         with cls._lock:
-            return {
+            cached_info = cls._cached_info
+            payload = {
                 "context_set": cls._working_directory is not None,
                 "current_working_directory": cls._working_directory,
-                "cache_available": cls._cached_info is not None,
+                "cache_available": cached_info is not None,
                 "cache_timestamp": cls._cache_timestamp,
-                "cached_repository": (cls._cached_info.get("name") if cls._cached_info else None),
-                "cached_organization": (
-                    cls._cached_info.get("organization") if cls._cached_info else None
-                ),
+                "cached_repository": (cached_info.get("name") if cached_info else None),
+                "cached_organization": (cached_info.get("organization") if cached_info else None),
             }
+        # discover_all does not acquire ``_lock`` (no class-state access),
+        # so call it after releasing the lock to keep status() ordering
+        # simple.
+        payload["discovered_repositories"] = cls.discover_all()
+        return payload
+
+    @classmethod
+    def discover_all(cls, working_directory: str | None = None) -> list[dict[str, Any]]:
+        """
+        Return every Azure DevOps repository discovered under *working_directory* (or cwd).
+
+        Always re-walks the filesystem — no caching. Non-Azure-DevOps
+        remotes (GitHub, etc.) are silently excluded by the underlying
+        :func:`inspect_git_repository`.
+
+        Args:
+            working_directory: Directory to walk. Defaults to
+                :data:`os.getcwd()` when ``None``.
+
+        Returns:
+            A (possibly empty) list of repository info dicts in the same
+            shape as :func:`discover_repositories`.
+
+        """
+        search_root = working_directory or os.getcwd()
+        return discover_repositories(search_root)
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     @classmethod
-    def _discover(cls, working_directory: str | None) -> dict[str, Any] | None:
+    def _discover(cls, working_directory: str | None) -> _Resolution:
         """
-        Run git discovery via Layer 1 primitives.
+        Resolve the target Azure DevOps repository to a :class:`_Resolution`.
 
-        Uses :func:`discover_repositories` + :func:`infer_target_repository`
-        to find and select an Azure DevOps repository.  If
-        *working_directory* is ``None``, falls back to :data:`os.getcwd()`.
+        Walks the filesystem via :func:`discover_repositories`, then
+        applies :func:`infer_target_repository` to disambiguate. Never
+        falls back to ``repos[0]`` — multi-repo workspaces with no
+        disambiguating hint return a :class:`_AmbiguousMatch`.
 
         Returns:
-            The selected repository info dict, or ``None`` when no Azure
-            DevOps repositories are discovered. Callers translate ``None``
-            into the appropriate :class:`ActionableError`.
+            * :class:`_NoMatch` — no Azure DevOps repos found.
+            * :class:`_SingleMatch` — exactly one candidate, or one
+              selected via cwd / working_directory hint.
+            * :class:`_AmbiguousMatch` — multiple repos found and the
+              hint did not pick one.
 
         """
         search_root = working_directory or os.getcwd()
         repos = discover_repositories(search_root)
 
         if not repos:
-            return None
+            return _NoMatch()
+
+        if len(repos) == 1:
+            return _SingleMatch(repo=repos[0])
 
         best = infer_target_repository(repos, working_directory=working_directory)
-        if best is None:
-            return repos[0]
+        if best is not None:
+            return _SingleMatch(repo=best)
 
-        return best
+        return _AmbiguousMatch(candidates=repos)
 
     @classmethod
     def _add_metadata(cls, info: dict[str, Any], source: str) -> dict[str, Any]:
@@ -377,6 +550,13 @@ def set_repository_context(working_directory: str) -> dict[str, Any]:
 def get_repository_context(working_directory: str | None = None) -> dict[str, Any]:
     """Delegate to :meth:`RepositoryContext.get`."""
     return RepositoryContext.get(working_directory)
+
+
+def discover_all_repositories(
+    working_directory: str | None = None,
+) -> list[dict[str, Any]]:
+    """Delegate to :meth:`RepositoryContext.discover_all`."""
+    return RepositoryContext.discover_all(working_directory)
 
 
 def get_context_status() -> dict[str, Any]:

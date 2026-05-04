@@ -39,6 +39,59 @@ def parse_ado_url(url: str) -> tuple[str, str, str, str]:
     return org, project, repository, pr_id
 
 
+def parse_ado_work_item_url(url: str) -> tuple[str, str, str]:
+    """
+    Parse an Azure DevOps work item URL into ``(organization, project, work_item_id)``.
+
+    Supports:
+
+    - ``https://dev.azure.com/{org}/{project}/_workitems/edit/{id}``
+    - ``https://{org}.visualstudio.com/{project}/_workitems/edit/{id}``
+      (modern — org in subdomain, project in first path segment)
+    - ``https://{org}.visualstudio.com/DefaultCollection/{project}/_workitems/edit/{id}``
+      (legacy — DefaultCollection retained)
+
+    Args:
+        url: Azure DevOps work item URL.
+
+    Returns:
+        ``(organization, project, work_item_id)`` — all empty strings
+        when *url* is not a recognised work item URL or any required
+        field is missing. Project is URL-decoded (``%20`` → space).
+
+    """
+    if not url or "/_workitems/edit/" not in url:
+        return "", "", ""
+
+    org = project = work_item_id = ""
+
+    id_match = re.search(r"/_workitems/edit/(\d+)", url)
+    if id_match:
+        work_item_id = id_match.group(1)
+
+    if "dev.azure.com" in url:
+        m = re.search(r"dev\.azure\.com/([^/]+)/([^/]+?)/_workitems/edit/", url)
+        if m:
+            org = m.group(1)
+            project = m.group(2).replace("%20", " ")
+    elif ".visualstudio.com" in url:
+        org_match = re.search(r"([^/]+?)\.visualstudio\.com", url)
+        if org_match:
+            org = org_match.group(1)
+        dc_match = re.search(r"DefaultCollection/([^/]+?)/_workitems/edit/", url)
+        if dc_match:
+            project = dc_match.group(1).replace("%20", " ")
+        else:
+            modern_match = re.search(r"\.visualstudio\.com/([^/]+?)/_workitems/edit/", url)
+            if modern_match:
+                project = modern_match.group(1).replace("%20", " ")
+
+    if not all([org, project, work_item_id]):
+        return "", "", ""
+
+    return org, project, work_item_id
+
+
 def parse_ado_date(date_str: str) -> datetime | None:
     """
     Parse an Azure DevOps API date string into a local-time *datetime*.

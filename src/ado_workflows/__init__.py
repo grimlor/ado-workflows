@@ -24,6 +24,7 @@ from ado_workflows.content import list_repo_items
 from ado_workflows.context import (
     RepositoryContext,
     clear_repository_context,
+    discover_all_repositories,
     get_context_status,
     get_repository_context,
     set_repository_context,
@@ -109,7 +110,7 @@ from ado_workflows.mutations import (
     move_work_items_to_sprint,
     update_work_item,
 )
-from ado_workflows.parsing import parse_ado_date, parse_ado_url
+from ado_workflows.parsing import parse_ado_date, parse_ado_url, parse_ado_work_item_url
 from ado_workflows.pr import AzureDevOpsPRContext, establish_pr_context, get_pr_author
 from ado_workflows.praise import filter_self_praise, is_praise_comment
 from ado_workflows.review import (
@@ -119,6 +120,10 @@ from ado_workflows.review import (
     get_review_status,
 )
 from ado_workflows.votes import deduplicate_team_containers, determine_vote_status
+from ado_workflows.work_items import (
+    AzureDevOpsWorkItemContext,
+    establish_work_item_context,
+)
 
 __all__: list[str] = [
     "AZURE_DEVOPS_RESOURCE_ID",
@@ -127,6 +132,7 @@ __all__: list[str] = [
     "ApprovalStatus",
     "AuthorSample",
     "AzureDevOpsPRContext",
+    "AzureDevOpsWorkItemContext",
     "CommentAnalysis",
     "CommentFormatter",
     "CommentInfo",
@@ -178,8 +184,10 @@ __all__: list[str] = [
     "deduplicate_team_containers",
     "default_comment_formatter",
     "determine_vote_status",
+    "discover_all_repositories",
     "discover_repositories",
     "establish_pr_context",
+    "establish_work_item_context",
     "fetch_required_approvals",
     "fetch_vote_timestamps",
     "filter_self_praise",
@@ -206,6 +214,7 @@ __all__: list[str] = [
     "move_work_items_to_sprint",
     "parse_ado_date",
     "parse_ado_url",
+    "parse_ado_work_item_url",
     "post_comment",
     "post_comments",
     "post_rich_comments",
